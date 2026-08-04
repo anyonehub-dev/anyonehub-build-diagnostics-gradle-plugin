@@ -19,7 +19,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
-import org.gradle.kotlin.dsl.register
+import org.gradle.kotlin.dsl.*
 
 /**
  * Entry point for the `com.anyonehub.diagnostics.health` Gradle plugin.
@@ -136,7 +136,7 @@ class ProjectHealthPlugin : Plugin<Project> {
             if (runtimeConfig != null) {
                 runtimeClasspathJars.from(
                     runtimeConfig.incoming
-                        .artifactView { lenient(true) }
+                        .artifactView { it.lenient(true) }
                         .artifacts
                         .artifactFiles
                 )
@@ -208,17 +208,17 @@ class ProjectHealthPlugin : Plugin<Project> {
                     .configure {
                         // AGP Artifacts API — the ONLY correct, non-hardcoded path to the R8 mapping.
                         // This Provider is lazy: it resolves only when the task actually executes.
-                        mappingFile.set(
+                        it.mappingFile.set(
                             variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
                         )
-                        variantName.set(variant.name)
+                        it.variantName.set(variant.name)
                 }
 
                 project.tasks
                     .withType(AggregateProjectHealthReportTask::class.java)
                     .named("projectHealthReport")
                     .configure {
-                        variantName.set(variant.name)
+                        it.variantName.set(variant.name)
                     }
             }
         }
@@ -230,7 +230,7 @@ class ProjectHealthPlugin : Plugin<Project> {
 
         // Automatically run the health report at the end of any assemble or build invocation.
         project.tasks.matching { it.name.startsWith("assemble") || it.name.startsWith("build") }.configureEach {
-            finalizedBy(aggregateTask)
+            it.finalizedBy(aggregateTask)
         }
     }
 

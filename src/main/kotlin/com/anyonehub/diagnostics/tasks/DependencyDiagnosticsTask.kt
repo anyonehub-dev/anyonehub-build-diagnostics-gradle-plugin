@@ -26,6 +26,7 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
 import org.gradle.workers.WorkerExecutor
+import org.gradle.kotlin.dsl.*
 import java.io.File
 import javax.inject.Inject
 
@@ -328,10 +329,10 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
             val workerOutput = File(workerOutputDir, safeKey)
 
             queue.submit(OutdatedDependencyWorker::class.java) {
-                groupId.set(group)
-                artifactId.set(artifact)
-                currentVersion.set(version)
-                outputFile.set(workerOutput)
+                it.groupId.set(group)
+                it.artifactId.set(artifact)
+                it.currentVersion.set(version)
+                it.outputFile.set(workerOutput)
             }
         }
     }

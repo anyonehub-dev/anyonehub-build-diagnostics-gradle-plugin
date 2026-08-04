@@ -4,13 +4,23 @@ plugins {
     id("com.vanniktech.maven.publish")  version "0.37.0"
 }
 
+kotlin {
+    jvmToolchain(21)
+}
+
 repositories {
+    mavenLocal()
     mavenCentral()
+    google()
+    gradlePluginPortal()
 }
 
 dependencies {
     implementation(gradleApi())
+    implementation(gradleKotlinDsl())
     implementation(kotlin("stdlib"))
+    compileOnly("com.android.tools.build:gradle:9.3.1")
+    compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
 }
 
 gradlePlugin {
