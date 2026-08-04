@@ -26,14 +26,14 @@ dependencies {
 gradlePlugin {
     plugins {
         create("projectHealthPlugin") {
-            id = "com.anyonehub.diagnostics.health"
+            id = "io.github.anyonehub-dev.diagnostics"
             implementationClass = "com.anyonehub.diagnostics.ProjectHealthPlugin"
         }
     }
 }
 
-group = "com.anyonehub.diagnostics"
-version = "1.0.0"
+group = "io.github.anyonehub-dev"
+version = "1.0.1"
 
 mavenPublishing {
     publishToMavenCentral()

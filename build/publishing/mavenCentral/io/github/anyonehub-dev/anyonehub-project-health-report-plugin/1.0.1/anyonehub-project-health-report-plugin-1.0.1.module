@@ -1,0 +1,99 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "io.github.anyonehub-dev",
+    "module": "anyonehub-project-health-report-plugin",
+    "version": "1.0.1",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.6.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "apiElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-api",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "files": [
+        {
+          "name": "anyonehub-project-health-report-plugin-1.0.1.jar",
+          "url": "anyonehub-project-health-report-plugin-1.0.1.jar",
+          "size": 93907,
+          "sha512": "cabc584d2bd880cf2900213d79ae14a4ab7a297a950dee3aed08196d92c774b0ff984ecfbb22db927cb49922d53ce8576c69f795697c84b31a2de1cf92666036",
+          "sha256": "c9b397fb2e6e188e25dd4afbca757787c87003557762cbbcb96f0cc70f20521a",
+          "sha1": "6a10a535ac95e6afee703dd9daa99d1daa7e605d",
+          "md5": "5ff5237066a01ab178c18001649ef649"
+        }
+      ]
+    },
+    {
+      "name": "runtimeElements",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.jvm.environment": "standard-jvm",
+        "org.gradle.jvm.version": 21,
+        "org.gradle.libraryelements": "jar",
+        "org.gradle.usage": "java-runtime",
+        "org.jetbrains.kotlin.platform.type": "jvm"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib"
+        }
+      ],
+      "dependencyConstraints": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib",
+          "version": {
+            "requires": "2.4.10"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "anyonehub-project-health-report-plugin-1.0.1.jar",
+          "url": "anyonehub-project-health-report-plugin-1.0.1.jar",
+          "size": 93907,
+          "sha512": "cabc584d2bd880cf2900213d79ae14a4ab7a297a950dee3aed08196d92c774b0ff984ecfbb22db927cb49922d53ce8576c69f795697c84b31a2de1cf92666036",
+          "sha256": "c9b397fb2e6e188e25dd4afbca757787c87003557762cbbcb96f0cc70f20521a",
+          "sha1": "6a10a535ac95e6afee703dd9daa99d1daa7e605d",
+          "md5": "5ff5237066a01ab178c18001649ef649"
+        }
+      ]
+    },
+    {
+      "name": "sourcesElements",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "anyonehub-project-health-report-plugin-1.0.1-sources.jar",
+          "url": "anyonehub-project-health-report-plugin-1.0.1-sources.jar",
+          "size": 28000,
+          "sha512": "8e4f3262537a5f896ff0bec7c10312a4d488fcc75cb92157f27dea2139d7ddd05a83c7fab97d7074b01b0f06d83c00984c18a492d3e72029aad17e0c35c70007",
+          "sha256": "ab2752b24ab39dffcbed08b2a6f70d021f5b5a3d4c933086ab1975fcf4faf93e",
+          "sha1": "948df126a384b304e07ea9e569a3923a09c738a5",
+          "md5": "14fd1a123419505f0828f9c119a400ae"
+        }
+      ]
+    }
+  ]
+}

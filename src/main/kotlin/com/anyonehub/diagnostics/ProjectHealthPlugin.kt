@@ -54,16 +54,30 @@ import org.gradle.kotlin.dsl.*
 class ProjectHealthPlugin : Plugin<Project> {
 
     override fun apply(project: Project) {
-        // ── Guard: only apply to Android projects ────────────────────────────
-        val hasAndroidApp = project.plugins.hasPlugin("com.android.application")
-        val hasAndroidLib = project.plugins.hasPlugin("com.android.library")
-        if (!hasAndroidApp && !hasAndroidLib) {
-            project.logger.warn(
-                "[ProjectHealthPlugin] Skipping ${project.path}: not an Android module. " +
-                        "Apply 'com.android.application' or 'com.android.library' first."
-            )
-            return
+        var configured = false
+        val configureBlock = {
+            if (!configured) {
+                configured = true
+                configureDiagnostics(project)
+            }
         }
+
+        // Wait for either the application or library plugin to be applied
+        project.pluginManager.withPlugin("com.android.application") { configureBlock() }
+        project.pluginManager.withPlugin("com.android.library") { configureBlock() }
+
+        // If after evaluating the project neither was applied, log a warning
+        project.afterEvaluate {
+            if (!configured) {
+                project.logger.warn(
+                    "[ProjectHealthPlugin] Skipping ${project.path}: not an Android module. " +
+                            "Apply 'com.android.application' or 'com.android.library' first."
+                )
+            }
+        }
+    }
+
+    private fun configureDiagnostics(project: Project) {
 
         // ── Intermediate output directory (lazy Provider) ────────────────────
         // Each pipeline task writes a single .txt file here; the aggregator reads all three.
