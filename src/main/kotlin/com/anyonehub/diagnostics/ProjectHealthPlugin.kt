@@ -94,7 +94,7 @@ class ProjectHealthPlugin : Plugin<Project> {
             intermediatesDir.map { it.file("dependency-diagnostics-intermediate.txt") }
 
         // ── Final report output ───────────────────────────────────────────────
-        val healthReportFile = project.rootProject.layout.projectDirectory.file("project-health.md")
+        val healthReportFile = project.layout.projectDirectory.file("project-health.md")
 
         // ── Register pipeline tasks (LAZY — nothing runs at configuration time) ─
         val deadCodeTask = project.tasks.register<GenerateDeadCodeReportTask>(
