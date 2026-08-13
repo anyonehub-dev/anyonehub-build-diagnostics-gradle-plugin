@@ -16,7 +16,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
@@ -27,7 +27,7 @@ import java.time.format.DateTimeFormatter
 
 /**
  * Aggregation task that reads all three pipeline intermediate files and renders
- * the final `build/reports/project-health.md` Markdown report.
+ * the final `build/reports/project-health.html` HTML report.
  *
  * Declared task dependencies (`dependsOn(deadCodeTask, compilerTask, dependencyTask)`)
  * are set in [com.anyonehub.diagnostics.ProjectHealthPlugin]; this task only declares
@@ -40,21 +40,15 @@ import java.time.format.DateTimeFormatter
 abstract class AggregateProjectHealthReportTask : DefaultTask() {
 
     /** Intermediate dead-code metrics from [GenerateDeadCodeReportTask]. */
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    @get:Optional
+    @get:Internal
     abstract val deadCodeIntermediateFile: RegularFileProperty
 
     /** Intermediate compiler warnings from [CompilerDiagnosticsTask]. */
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    @get:Optional
+    @get:Internal
     abstract val compilerIntermediateFile: RegularFileProperty
 
     /** Intermediate dependency statuses from [DependencyDiagnosticsTask]. */
-    @get:InputFile
-    @get:PathSensitive(PathSensitivity.NONE)
-    @get:Optional
+    @get:Internal
     abstract val dependencyIntermediateFile: RegularFileProperty
 
     /** The final Markdown report output. */
@@ -107,8 +101,8 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
                     "  Unused deps     : ${unused.size}"
         )
 
-        // ── Render Markdown ───────────────────────────────────────────────────
-        reportFile.bufferedWriter().use { it.write(renderMarkdown(
+        // ── Render HTML ───────────────────────────────────────────────────
+        reportFile.bufferedWriter().use { it.write(renderHtml(
             timestamp = timestamp,
             variant = variant,
             module = module,

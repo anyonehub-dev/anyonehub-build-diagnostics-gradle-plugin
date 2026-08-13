@@ -11,6 +11,7 @@ package com.anyonehub.diagnostics
 
 import com.android.build.api.artifact.SingleArtifact
 import com.android.build.api.variant.AndroidComponentsExtension
+import com.anyonehub.diagnostics.service.CompilerOutputCollectorService
 import com.anyonehub.diagnostics.tasks.AggregateProjectHealthReportTask
 import com.anyonehub.diagnostics.tasks.CompilerDiagnosticsTask
 import com.anyonehub.diagnostics.tasks.DependencyDiagnosticsTask
@@ -79,6 +80,16 @@ class ProjectHealthPlugin : Plugin<Project> {
 
     private fun configureDiagnostics(project: Project) {
 
+        // ── Register the BuildService for live compiler output collection ─────
+        val collectorServiceProvider = project.gradle.sharedServices.registerIfAbsent(
+            "compilerOutputCollector",
+            CompilerOutputCollectorService::class.java
+        ) { spec ->
+            spec.parameters.outputDir.set(
+                project.layout.buildDirectory.dir("diagnostics/intermediates").get().asFile.absolutePath
+            )
+        }
+
         // ── Intermediate output directory (lazy Provider) ────────────────────
         // Each pipeline task writes a single .txt file here; the aggregator reads all three.
         val intermediatesDir = project.layout.buildDirectory.dir("diagnostics/intermediates")
@@ -94,7 +105,7 @@ class ProjectHealthPlugin : Plugin<Project> {
             intermediatesDir.map { it.file("dependency-diagnostics-intermediate.txt") }
 
         // ── Final report output ───────────────────────────────────────────────
-        val healthReportFile = project.layout.projectDirectory.file("project-health.md")
+        val healthReportFile = project.layout.projectDirectory.file("project-health.html")
 
         // ── Register pipeline tasks (LAZY — nothing runs at configuration time) ─
         val deadCodeTask = project.tasks.register<GenerateDeadCodeReportTask>(
@@ -110,8 +121,13 @@ class ProjectHealthPlugin : Plugin<Project> {
             "generateCompilerDiagnostics"
         ) {
             group = TASK_GROUP
-            description = "Extracts C++ / Kotlin / Java compiler warnings."
+            description = "Extracts C++ / Kotlin / Java compiler warnings via live BuildService interception."
             
+            // Wire the BuildService provider so the task can drain collected warnings.
+            collectorServiceOutput.set(
+                intermediatesDir.map { it.file("compiler-service-output.txt") }
+            )
+
             // Add implicit dependencies to ensure these compile tasks run first
             mustRunAfter(project.tasks.withType(org.gradle.api.tasks.compile.JavaCompile::class.java))
             mustRunAfter(project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java))
@@ -245,6 +261,52 @@ class ProjectHealthPlugin : Plugin<Project> {
         // Automatically run the health report at the end of any assemble or build invocation.
         project.tasks.matching { it.name.startsWith("assemble") || it.name.startsWith("build") }.configureEach {
             it.finalizedBy(aggregateTask)
+        }
+
+        // ── Wire compile tasks with live output interception ──────────────────
+        // Hook into KotlinCompile tasks to capture deprecation warnings in real-time.
+        project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach { kotlinTask ->
+            kotlinTask.usesService(collectorServiceProvider)
+            kotlinTask.doFirst {
+                val service = collectorServiceProvider.get()
+                kotlinTask.logging.addStandardErrorListener { line ->
+                    service.collectLine(line.toString(), "Kotlin")
+                }
+                kotlinTask.logging.addStandardOutputListener { line ->
+                    service.collectLine(line.toString(), "Kotlin")
+                }
+            }
+        }
+
+        // Hook into JavaCompile tasks to capture deprecation warnings.
+        project.tasks.withType(org.gradle.api.tasks.compile.JavaCompile::class.java).configureEach { javaTask ->
+            javaTask.usesService(collectorServiceProvider)
+            // Inject -Xlint:deprecation to force javac to emit deprecation warnings.
+            javaTask.options.compilerArgs.let { args ->
+                if ("-Xlint:deprecation" !in args) {
+                    args.add("-Xlint:deprecation")
+                }
+            }
+            javaTask.doFirst {
+                val service = collectorServiceProvider.get()
+                javaTask.logging.addStandardErrorListener { line ->
+                    service.collectLine(line.toString(), "Java")
+                }
+                javaTask.logging.addStandardOutputListener { line ->
+                    service.collectLine(line.toString(), "Java")
+                }
+            }
+        }
+
+        // After all compile tasks finish, drain collected warnings to the service output file.
+        project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach { kotlinTask ->
+            kotlinTask.doLast {
+                val service = collectorServiceProvider.get()
+                val serviceOutputFile = project.layout.buildDirectory
+                    .dir("diagnostics/intermediates").get().asFile
+                    .resolve("compiler-service-output.txt")
+                service.drainToFile(serviceOutputFile)
+            }
         }
     }
 

@@ -53,6 +53,15 @@ abstract class CompilerDiagnosticsTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val javaTmpDir: ConfigurableFileCollection
 
+    /**
+     * Output file from the [CompilerOutputCollectorService] BuildService.
+     * This is the PRIMARY source for Kotlin/Java deprecation warnings,
+     * intercepted live from compiler stderr during task execution.
+     * Falls back gracefully when the file doesn't exist (e.g., no compile tasks ran).
+     */
+    @get:org.gradle.api.tasks.Internal
+    abstract val collectorServiceOutput: RegularFileProperty
+
     @get:OutputFile
     abstract val outputFile: RegularFileProperty
 
@@ -62,45 +71,64 @@ abstract class CompilerDiagnosticsTask : DefaultTask() {
         output.parentFile.mkdirs()
 
         val allWarnings = mutableListOf<CompilerWarning>()
+        // Track seen warnings by (file + line) to prevent duplicates across sources.
+        val seenKeys = mutableSetOf<String>()
 
-        // C++ warnings
-        val allFiles = buildList {
-            cxxBaseDir.files.filter { it.exists() }.forEach { dir ->
-                addAll(dir.walkTopDown().filter { it.extension == "txt" })
+        fun addWarning(warning: CompilerWarning) {
+            val key = "${warning.language}:${warning.sourceFile}:${warning.line}:${warning.snippet.take(60)}"
+            if (seenKeys.add(key)) {
+                allWarnings += warning
             }
         }
-        
-        cxxBaseDir.files.filter { it.exists() }.forEach { cxxDir ->
-            logger.lifecycle("[ProjectHealth/Compiler] Scanning C++ build artifacts in ${cxxDir.path}")
-            allWarnings += parseCxxWarnings(cxxDir)
+
+        // ── PRIMARY SOURCE: BuildService live interception ────────────────────
+        val serviceFile = collectorServiceOutput.orNull?.asFile
+        if (serviceFile != null && serviceFile.exists() && serviceFile.length() > 0) {
+            logger.lifecycle("[ProjectHealth/Compiler] Reading live BuildService output: ${serviceFile.path}")
+            serviceFile.readLines()
+                .filter { it.isNotBlank() }
+                .mapNotNull { CompilerWarning.fromIntermediateLine(it) }
+                .forEach { addWarning(it) }
+            logger.lifecycle(
+                "[ProjectHealth/Compiler] BuildService captured ${allWarnings.size} deprecation warnings."
+            )
+        } else {
+            logger.lifecycle(
+                "[ProjectHealth/Compiler] No BuildService output found — falling back to log scanning."
+            )
         }
 
-        // Kotlin Build Reports
+        // ── C++ warnings (always from file scanning — no BuildService needed) ──
+        cxxBaseDir.files.filter { it.exists() }.forEach { cxxDir ->
+            logger.lifecycle("[ProjectHealth/Compiler] Scanning C++ build artifacts in ${cxxDir.path}")
+            parseCxxWarnings(cxxDir).forEach { addWarning(it) }
+        }
+
+        // ── SECONDARY FALLBACK: Kotlin Build Reports ──────────────────────────
         val allReports = buildList {
             kotlinBuildReportDir.files.filter { it.exists() }.forEach { dir ->
                 addAll(dir.walkTopDown().filter { it.extension == "txt" })
             }
         }
         if (allReports.isNotEmpty()) {
-            logger.lifecycle("[ProjectHealth/Compiler] Reading Kotlin Build Reports")
-            allWarnings += parseKotlinBuildReports(allReports)
+            logger.lifecycle("[ProjectHealth/Compiler] Reading Kotlin Build Reports (secondary source)")
+            parseKotlinBuildReports(allReports).forEach { addWarning(it) }
         }
 
-        // Kotlin tmp directory
+        // ── TERTIARY FALLBACK: Gradle tmp directories ──────────────────────────
         kotlinTmpDir.files.filter { it.exists() }.forEach { kotlinTmp ->
-            allWarnings += parseCompileTmpDir(kotlinTmp, language = "Kotlin")
+            parseCompileTmpDir(kotlinTmp, language = "Kotlin").forEach { addWarning(it) }
         }
-
-        // Java tmp directory
         javaTmpDir.files.filter { it.exists() }.forEach { javaTmp ->
-            allWarnings += parseCompileTmpDir(javaTmp, language = "Java")
+            parseCompileTmpDir(javaTmp, language = "Java").forEach { addWarning(it) }
         }
 
         val hasKotlinJava = allWarnings.any { it.language == "Kotlin" || it.language == "Java" }
         val advisory = if (!hasKotlinJava) {
             buildString {
-                appendLine("ADVISORY: No persisted Kotlin/Java deprecation warning files found.")
-                appendLine("To enable Kotlin Build Reports, add to gradle.properties:")
+                appendLine("ADVISORY: No Kotlin/Java deprecation warnings detected.")
+                appendLine("The BuildService listener captured 0 deprecation lines from compiler output.")
+                appendLine("To enable Kotlin Build Reports as a secondary source, add to gradle.properties:")
                 appendLine("  kotlin.build.report.output=file")
                 appendLine("  kotlin.build.report.file.output.dir=build/reports/kotlin-build")
             }
