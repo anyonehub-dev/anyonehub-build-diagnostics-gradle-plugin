@@ -10,7 +10,7 @@
 package com.anyonehub.diagnostics.tasks
 
 import com.anyonehub.diagnostics.model.DependencyStatus
-import com.anyonehub.diagnostics.worker.OutdatedDependencyWorker
+import com.anyonehub.diagnostics.worker.DependencyVersionChecker
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -25,10 +25,10 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
-import org.gradle.workers.WorkerExecutor
 import org.gradle.kotlin.dsl.*
 import java.io.File
-import javax.inject.Inject
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * Pipeline B — Dependency Diagnostics Task.
@@ -59,10 +59,6 @@ import javax.inject.Inject
 @UntrackedTask(because = "Performs live network checks against Maven repositories and scans " +
         "machine-local bytecode intermediates; outputs are not safe to cache across builds or machines.")
 abstract class DependencyDiagnosticsTask : DefaultTask() {
-
-    /** Inject the Gradle Worker executor. */
-    @get:Inject
-    abstract val workerExecutor: WorkerExecutor
 
     /**
      * JARs resolved from the `runtimeClasspath` configuration via `ArtifactView`.
@@ -137,11 +133,8 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
             )
         }
 
-        // Workers run concurrently; await() blocks until all submitted work is done.
-        // This is called on the task thread — Gradle schedules it correctly.
-        if (networkEnabled) {
-            workerExecutor.await()
-        }
+        // The executor blocks until all tasks complete inside submitVersionCheckWorkers.
+        // No Gradle Worker API await() needed.
 
         // ── Step 4: Collect worker results ────────────────────────────────────
         val versionCheckResults: Map<String, Pair<String?, String?>> =
@@ -306,16 +299,12 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
     // Worker submission
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * Submits one [OutdatedDependencyWorker] per declared dependency coordinate.
-     * Workers run in parallel via `WorkerExecutor.noIsolation()` (shared classpath,
-     * no subprocess overhead).
-     */
     private fun submitVersionCheckWorkers(
         coordinates: List<String>,
         workerOutputDir: File,
     ) {
-        val queue = workerExecutor.noIsolation()
+        val executor = Executors.newFixedThreadPool(8)
+        val futures = mutableListOf<Future<*>>()
 
         coordinates.forEach { coord ->
             val parts = coord.split(":")
@@ -324,17 +313,16 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
             val group = parts[0]
             val artifact = parts[1]
             val version = parts[2]
-            // Safe filename: replace dots and colons to avoid filesystem issues.
             val safeKey = "${group.replace('.', '_')}__${artifact.replace('.', '_')}.txt"
             val workerOutput = File(workerOutputDir, safeKey)
 
-            queue.submit(OutdatedDependencyWorker::class.java) {
-                it.groupId.set(group)
-                it.artifactId.set(artifact)
-                it.currentVersion.set(version)
-                it.outputFile.set(workerOutput)
-            }
+            futures.add(executor.submit {
+                DependencyVersionChecker.checkVersion(group, artifact, version, workerOutput)
+            })
         }
+        
+        futures.forEach { it.get() }
+        executor.shutdown()
     }
 
     /**

@@ -158,20 +158,12 @@ abstract class CompilerOutputCollectorService :
     }
 
     /**
-     * Flushes all collected warnings to the specified output file.
-     * Called by [CompilerDiagnosticsTask] after all compile tasks have finished.
-     *
-     * @return The number of warnings written.
+     * Legacy method. File writing is now deferred to [close] to prevent
+     * in-flight disk I/O from blocking Gradle worker threads during parallel compilation.
      */
     fun drainToFile(outputFile: File): Int {
-        outputFile.parentFile?.mkdirs()
-        val warnings = collectedWarnings.toList()
-        outputFile.bufferedWriter().use { writer ->
-            warnings.forEach { warning ->
-                writer.appendLine(warning.toIntermediateLine())
-            }
-        }
-        return warnings.size
+        // No-op. Deferring to close().
+        return 0
     }
 
     /** Returns the current count of collected warnings (for diagnostics). */
@@ -183,6 +175,19 @@ abstract class CompilerOutputCollectorService :
     }
 
     override fun close() {
+        val outDirStr = parameters.outputDir.orNull
+        if (outDirStr != null) {
+            val outputFile = File(outDirStr, "compiler-service-output.txt")
+            outputFile.parentFile?.mkdirs()
+            val warnings = collectedWarnings.toList()
+            if (warnings.isNotEmpty()) {
+                outputFile.bufferedWriter().use { writer ->
+                    warnings.forEach { warning ->
+                        writer.appendLine(warning.toIntermediateLine())
+                    }
+                }
+            }
+        }
         collectedWarnings.clear()
     }
 }

@@ -86,7 +86,7 @@ class ProjectHealthPlugin : Plugin<Project> {
             CompilerOutputCollectorService::class.java
         ) { spec ->
             spec.parameters.outputDir.set(
-                project.layout.buildDirectory.dir("diagnostics/intermediates").get().asFile.absolutePath
+                project.rootProject.layout.buildDirectory.dir("diagnostics/intermediates").get().asFile.absolutePath
             )
         }
 
@@ -125,7 +125,7 @@ class ProjectHealthPlugin : Plugin<Project> {
             
             // Wire the BuildService provider so the task can drain collected warnings.
             collectorServiceOutput.set(
-                intermediatesDir.map { it.file("compiler-service-output.txt") }
+                project.rootProject.layout.buildDirectory.dir("diagnostics/intermediates").map { it.file("compiler-service-output.txt") }
             )
 
             // Add implicit dependencies to ensure these compile tasks run first
@@ -298,16 +298,8 @@ class ProjectHealthPlugin : Plugin<Project> {
             }
         }
 
-        // After all compile tasks finish, drain collected warnings to the service output file.
-        project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java).configureEach { kotlinTask ->
-            kotlinTask.doLast {
-                val service = collectorServiceProvider.get()
-                val serviceOutputFile = project.layout.buildDirectory
-                    .dir("diagnostics/intermediates").get().asFile
-                    .resolve("compiler-service-output.txt")
-                service.drainToFile(serviceOutputFile)
-            }
-        }
+        // Removed doLast drainToFile to ensure 100% lock-free deferred execution
+        // in CompilerOutputCollectorService.close().
     }
 
     companion object {
