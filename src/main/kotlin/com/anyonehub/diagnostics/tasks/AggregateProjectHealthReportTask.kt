@@ -78,10 +78,15 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         val compilerWarnings = readCompilerWarnings()
         val dependencyStatuses = readDependencyStatuses()
 
-        // ── Compute summary statistics ────────────────────────────────────────
-        val cppWarnings = compilerWarnings.filter { it.language == "C++" }
+        // ── Group compiler warnings by category ───────────────────────────────
+        val cppWarnings         = compilerWarnings.filter { it.category == CompilerWarning.CAT_CPP }
+        val deprecations        = compilerWarnings.filter { it.category == CompilerWarning.CAT_DEPRECATIONS }
+        val kotlin24Redundancies = compilerWarnings.filter { it.category == CompilerWarning.CAT_KOTLIN_REDUNDANCIES }
+        val antlrUnsafe         = compilerWarnings.filter { it.category == CompilerWarning.CAT_ANTLR_UNSAFE }
+        val javaCompilerWarnings = compilerWarnings.filter { it.category == CompilerWarning.CAT_JAVA_COMPILER }
+        // Legacy language-split (kept for the summary table)
         val kotlinWarnings = compilerWarnings.filter { it.language == "Kotlin" }
-        val javaWarnings = compilerWarnings.filter { it.language == "Java" }
+        val javaWarnings   = compilerWarnings.filter { it.language == "Java" }
         val outdated = dependencyStatuses.filter { it.isOutdated }
         val unused = dependencyStatuses.filter { it.isUnused }
 
@@ -251,7 +256,7 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         appendLine("    <p>Generated: <span>$timestamp</span></p>")
         appendLine("    <p>Module: <code>$module</code></p>")
         appendLine("    <p>Variant: <code>$variant</code></p>")
-        appendLine("    <p>Plugin: <code>com.anyonehub.diagnostics.health v1.0.5</code></p>")
+        appendLine("    <p>Plugin: <code>com.anyonehub.diagnostics.health v1.1.0</code></p>")
         appendLine("</div>")
         
         // Executive Summary
@@ -260,8 +265,10 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         appendLine("    <thead><tr><th>Category</th><th>Count</th><th>Severity</th></tr></thead>")
         appendLine("    <tbody>")
         appendLine("        <tr><td>🔧 C++ Compiler Warnings</td><td>${cppWarnings.size}</td><td>${severityBadge(cppWarnings.size)}</td></tr>")
-        appendLine("        <tr><td>☕ Kotlin Deprecations</td><td>${kotlinWarnings.size}</td><td>${severityBadge(kotlinWarnings.size)}</td></tr>")
-        appendLine("        <tr><td>☕ Java Deprecations</td><td>${javaWarnings.size}</td><td>${severityBadge(javaWarnings.size)}</td></tr>")
+        appendLine("        <tr><td>⚠️ Deprecations (Kotlin/Java)</td><td>${deprecations.size}</td><td>${severityBadge(deprecations.size)}</td></tr>")
+        appendLine("        <tr><td>🔁 Kotlin 2.4 Redundancies</td><td>${kotlin24Redundancies.size}</td><td>${severityBadge(kotlin24Redundancies.size)}</td></tr>")
+        appendLine("        <tr><td>🦠 ANTLR Unsafe Calls</td><td>${antlrUnsafe.size}</td><td>${severityBadge(antlrUnsafe.size)}</td></tr>")
+        appendLine("        <tr><td>☕ Java Compiler Warnings</td><td>${javaCompilerWarnings.size}</td><td>${severityBadge(javaCompilerWarnings.size)}</td></tr>")
         appendLine("        <tr><td>💀 Dead Code Items (R8)</td><td>${deadCodeMetrics.totalUnused}</td><td>${severityBadge(deadCodeMetrics.totalUnused)}</td></tr>")
         appendLine("        <tr><td>📦 Outdated Dependencies</td><td>${outdated.size}</td><td>${severityBadge(outdated.size)}</td></tr>")
         appendLine("        <tr><td>🗑️ Potentially Unused Deps</td><td>${unused.size}</td><td>${severityBadge(unused.size)}</td></tr>")
@@ -286,37 +293,69 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
             appendLine("    </tbody></table></div></details>")
         }
 
-        // Kotlin Deprecations
-        appendLine("<h2>☕ Kotlin Deprecation Warnings</h2>")
-        if (kotlinWarnings.isEmpty()) {
-            appendLine("<div class=\"alert\">✅ <strong>No Kotlin deprecation warnings found in build reports.</strong><br/><small>To enable persistent Kotlin Build Reports, add to <code>gradle.properties</code>:<br/><code>kotlin.build.report.output=file</code><br/><code>kotlin.build.report.file.output.dir=build/reports/kotlin-build</code></small></div>")
+        // ── Section: Deprecations ─────────────────────────────────────────────
+        appendLine("<h2>⚠️ Deprecations</h2>")
+        if (deprecations.isEmpty()) {
+            appendLine("<div class=\"alert\">✅ <strong>No deprecation warnings detected.</strong></div>")
         } else {
-            appendLine("<details><summary>View ${kotlinWarnings.size} Kotlin Deprecations</summary><div class=\"details-content\">")
+            appendLine("<details open><summary>View ${deprecations.size} Deprecation Warnings</summary><div class=\"details-content\">")
             appendLine("<table>")
-            appendLine("    <thead><tr><th>Source File</th><th>Line</th><th>Col</th><th>API / Snippet</th></tr></thead>")
+            appendLine("    <thead><tr><th>Lang</th><th>Source File</th><th>Line</th><th>API / Snippet</th></tr></thead>")
             appendLine("    <tbody>")
-            kotlinWarnings.sortedBy { it.sourceFile }.forEach { w ->
+            deprecations.sortedBy { it.sourceFile }.forEach { w ->
                 val file = w.sourceFile.substringAfterLast('/')
                 val line = if (w.line > 0) "<code>${w.line}</code>" else "—"
-                val col  = if (w.column > 0) "<code>${w.column}</code>" else "—"
-                appendLine("        <tr><td><code>$file</code></td><td>$line</td><td>$col</td><td>${escapeHtml(w.snippet)}</td></tr>")
+                appendLine("        <tr><td><span class=\"badge info\">${w.language}</span></td><td><code>$file</code></td><td>$line</td><td>${escapeHtml(w.snippet)}</td></tr>")
             }
             appendLine("    </tbody></table></div></details>")
         }
 
-        // Java Deprecations
-        appendLine("<h2>☕ Java Deprecation Warnings</h2>")
-        if (javaWarnings.isEmpty()) {
-            appendLine("<div class=\"alert\">✅ <strong>No Java deprecation warnings found.</strong></div>")
+        // ── Section: Kotlin 2.4 Redundancies ─────────────────────────────────
+        appendLine("<h2>🔁 Kotlin 2.4 Redundancies</h2>")
+        if (kotlin24Redundancies.isEmpty()) {
+            appendLine("<div class=\"alert\">✅ <strong>No redundant Kotlin 2.4 compiler arguments detected.</strong></div>")
         } else {
-            appendLine("<details><summary>View ${javaWarnings.size} Java Deprecations</summary><div class=\"details-content\">")
+            appendLine("<p><small>These compiler arguments are no longer needed for Kotlin 2.4 and can be safely removed from your <code>build.gradle.kts</code>.</small></p>")
+            appendLine("<details open><summary>View ${kotlin24Redundancies.size} Redundant Arguments</summary><div class=\"details-content\">")
             appendLine("<table>")
-            appendLine("    <thead><tr><th>Source File</th><th>Line</th><th>Snippet</th></tr></thead>")
+            appendLine("    <thead><tr><th>Argument</th></tr></thead>")
             appendLine("    <tbody>")
-            javaWarnings.sortedBy { it.sourceFile }.forEach { w ->
+            kotlin24Redundancies.distinctBy { it.snippet }.forEach { w ->
+                appendLine("        <tr><td><code>${escapeHtml(w.snippet)}</code></td></tr>")
+            }
+            appendLine("    </tbody></table></div></details>")
+        }
+
+        // ── Section: ANTLR Unsafe Calls ───────────────────────────────────────
+        appendLine("<h2>🦠 ANTLR Unsafe Call Suppressions</h2>")
+        if (antlrUnsafe.isEmpty()) {
+            appendLine("<div class=\"alert\">✅ <strong>No ANTLR UNSAFE_CALL suppressions detected.</strong></div>")
+        } else {
+            appendLine("<p><small>These suppressions indicate compiler behavior is <strong>UNSPECIFIED</strong>. Review each ANTLR grammar file to resolve the underlying null-safety issue.</small></p>")
+            appendLine("<details open><summary>View ${antlrUnsafe.size} UNSAFE_CALL Suppressions</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Source File</th><th>Snippet</th></tr></thead>")
+            appendLine("    <tbody>")
+            antlrUnsafe.forEach { w ->
+                val file = w.sourceFile.substringAfterLast('/')
+                appendLine("        <tr><td><code>$file</code></td><td>${escapeHtml(w.snippet)}</td></tr>")
+            }
+            appendLine("    </tbody></table></div></details>")
+        }
+
+        // ── Section: Java Compiler Warnings ───────────────────────────────────
+        appendLine("<h2>☕ Java Compiler Warnings</h2>")
+        if (javaCompilerWarnings.isEmpty()) {
+            appendLine("<div class=\"alert\">✅ <strong>No Java compiler warnings detected.</strong></div>")
+        } else {
+            appendLine("<details open><summary>View ${javaCompilerWarnings.size} Java Compiler Warnings</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Flag</th><th>Source File</th><th>Line</th><th>Snippet</th></tr></thead>")
+            appendLine("    <tbody>")
+            javaCompilerWarnings.sortedBy { it.sourceFile }.forEach { w ->
                 val file = w.sourceFile.substringAfterLast('/')
                 val line = if (w.line > 0) "<code>${w.line}</code>" else "—"
-                appendLine("        <tr><td><code>$file</code></td><td>$line</td><td>${escapeHtml(w.snippet)}</td></tr>")
+                appendLine("        <tr><td><span class=\"badge warning\">${w.flag}</span></td><td><code>$file</code></td><td>$line</td><td>${escapeHtml(w.snippet)}</td></tr>")
             }
             appendLine("    </tbody></table></div></details>")
         }

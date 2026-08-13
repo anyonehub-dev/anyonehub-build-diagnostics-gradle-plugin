@@ -1,5 +1,6 @@
 // Copyright 2024 anyone-Hub
 // Phase 3 data model — a single compiler warning from C++/Kotlin/Java.
+// v1.1.0: added `category` field for grouped HTML rendering.
 
 package com.anyonehub.diagnostics.model
 
@@ -7,6 +8,14 @@ package com.anyonehub.diagnostics.model
  * Represents one compiler diagnostic warning captured from either:
  * - Clang/GCC C++ compilation (parsed from CMake build logs / ninja log), or
  * - KotlinCompile / JavaCompile deprecation diagnostics.
+ *
+ * ## Categories (v1.1.0)
+ * Each warning now carries a [category] that drives grouping in the HTML report:
+ * - "Deprecations"          — `'X' is deprecated`, `Deprecated in Java.`
+ * - "Kotlin 2.4 Redundancies" — `-Xannotation-default-target` etc.
+ * - "ANTLR Unsafe Calls"    — `UNSAFE_CALL` suppression warnings
+ * - "Java Compiler Warnings" — `javac` `[deprecation]` / `[unchecked]`
+ * - "C++ Warnings"          — Clang/GCC diagnostics from CMake logs
  */
 data class CompilerWarning(
     /** Compiler origin: "C++", "Kotlin", or "Java". */
@@ -26,10 +35,20 @@ data class CompilerWarning(
     val flag: String,
     /** Short context snippet of the flagged code (truncated to 120 chars). */
     val snippet: String,
+    /**
+     * Display category for HTML grouping (v1.1.0).
+     * One of: "Deprecations", "Kotlin 2.4 Redundancies",
+     * "ANTLR Unsafe Calls", "Java Compiler Warnings", "C++ Warnings".
+     */
+    val category: String = when {
+        language == "C++"  -> "C++ Warnings"
+        language == "Java" -> "Java Compiler Warnings"
+        else               -> "Deprecations"
+    },
 ) {
     /** Serialise to the one-line intermediate format (pipe-delimited). */
     fun toIntermediateLine(): String =
-        "$language|$sourceFile|$line|$column|$flag|${snippet.replace('|', '¦').take(120)}"
+        "$language|$sourceFile|$line|$column|$flag|${snippet.replace('|', '¦').take(120)}|${category.replace('|', '¦')}"
 
     companion object {
         private const val SEPARATOR = "|"
@@ -38,6 +57,12 @@ data class CompilerWarning(
         fun fromIntermediateLine(line: String): CompilerWarning? {
             val parts = line.split(SEPARATOR)
             if (parts.size < 6) return null
+            // category is field [6] — fall back gracefully for files written by older versions
+            val cat = if (parts.size >= 7) parts[6].replace('¦', '|') else when {
+                parts[0] == "C++"  -> "C++ Warnings"
+                parts[0] == "Java" -> "Java Compiler Warnings"
+                else               -> "Deprecations"
+            }
             return CompilerWarning(
                 language = parts[0],
                 sourceFile = parts[1],
@@ -45,11 +70,19 @@ data class CompilerWarning(
                 column = parts[3].toIntOrNull() ?: -1,
                 flag = parts[4],
                 snippet = parts[5].replace('¦', '|'),
+                category = cat,
             )
         }
 
         /** Section header written to the intermediate file. */
         const val SECTION_HEADER = "=== COMPILER_WARNINGS ==="
         const val SECTION_FOOTER = "=========================="
+
+        /** Canonical category names used in the HTML report. */
+        const val CAT_DEPRECATIONS = "Deprecations"
+        const val CAT_KOTLIN_REDUNDANCIES = "Kotlin 2.4 Redundancies"
+        const val CAT_ANTLR_UNSAFE = "ANTLR Unsafe Calls"
+        const val CAT_JAVA_COMPILER = "Java Compiler Warnings"
+        const val CAT_CPP = "C++ Warnings"
     }
 }
