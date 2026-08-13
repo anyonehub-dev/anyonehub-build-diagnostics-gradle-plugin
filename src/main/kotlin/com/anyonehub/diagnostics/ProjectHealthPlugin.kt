@@ -70,7 +70,7 @@ class ProjectHealthPlugin : Plugin<Project> {
         // If after evaluating the project neither was applied, log a warning
         project.afterEvaluate {
             if (!configured) {
-                project.logger.warn(
+                project.logger.debug(
                     "[ProjectHealthPlugin] Skipping ${project.path}: not an Android module. " +
                             "Apply 'com.android.application' or 'com.android.library' first."
                 )
