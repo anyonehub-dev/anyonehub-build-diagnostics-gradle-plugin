@@ -149,11 +149,11 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Markdown renderer
+    // HTML renderer
     // ─────────────────────────────────────────────────────────────────────────
 
     @Suppress("LongParameterList")
-    private fun renderMarkdown(
+    private fun renderHtml(
         timestamp: String,
         variant: String,
         module: String,
@@ -166,207 +166,261 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         allDependencies: List<DependencyStatus>,
     ): String = buildString {
 
-        // ── Header ────────────────────────────────────────────────────────────
-        appendLine("# 🏥 Project Health Report — ${projectName.get()}")
-        appendLine()
-        appendLine("> **Generated:** $timestamp")
-        appendLine("> **Module:** `$module`")
-        appendLine("> **Variant:** `$variant`")
-        appendLine("> **Plugin:** `com.anyonehub.diagnostics.health` v1.0.0")
-        appendLine()
+        appendLine("<!DOCTYPE html>")
+        appendLine("<html lang=\"en\">")
+        appendLine("<head>")
+        appendLine("    <meta charset=\"UTF-8\">")
+        appendLine("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">")
+        appendLine("    <title>Project Health Report — ${projectName.get()}</title>")
+        appendLine("    <style>")
+        appendLine("        :root {")
+        appendLine("            --bg-color: #0d1117;")
+        appendLine("            --text-color: #c9d1d9;")
+        appendLine("            --heading-color: #ffffff;")
+        appendLine("            --border-color: #30363d;")
+        appendLine("            --table-header-bg: #161b22;")
+        appendLine("            --table-row-even: #0d1117;")
+        appendLine("            --table-row-odd: #161b22;")
+        appendLine("            --accent-color: #58a6ff;")
+        appendLine("            --success-color: #2ea043;")
+        appendLine("            --warning-color: #d29922;")
+        appendLine("            --error-color: #f85149;")
+        appendLine("            --code-bg: #161b22;")
+        appendLine("            --card-bg: #1c2128;")
+        appendLine("            --details-bg: #21262d;")
+        appendLine("        }")
+        appendLine("        body {")
+        appendLine("            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;")
+        appendLine("            background-color: var(--bg-color);")
+        appendLine("            color: var(--text-color);")
+        appendLine("            line-height: 1.6;")
+        appendLine("            padding: 2rem;")
+        appendLine("            max-width: 1200px;")
+        appendLine("            margin: 0 auto;")
+        appendLine("        }")
+        appendLine("        h1, h2, h3 { color: var(--heading-color); }")
+        appendLine("        h1 { border-bottom: 2px solid var(--border-color); padding-bottom: 10px; }")
+        appendLine("        h2 { margin-top: 2.5rem; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }")
+        appendLine("        .meta-card {")
+        appendLine("            background: var(--card-bg); border: 1px solid var(--border-color);")
+        appendLine("            border-radius: 6px; padding: 1.5rem; margin-bottom: 2rem;")
+        appendLine("        }")
+        appendLine("        .meta-card p { margin: 0.5rem 0; font-weight: 500; }")
+        appendLine("        .meta-card span { color: var(--accent-color); font-weight: bold; }")
+        appendLine("        table {")
+        appendLine("            width: 100%; border-collapse: collapse; margin-top: 1rem; margin-bottom: 1.5rem;")
+        appendLine("            background-color: var(--bg-color);")
+        appendLine("        }")
+        appendLine("        th, td { border: 1px solid var(--border-color); padding: 12px 16px; text-align: left; }")
+        appendLine("        th { background-color: var(--table-header-bg); font-weight: 600; color: var(--heading-color); }")
+        appendLine("        tr:nth-child(even) { background-color: var(--table-row-even); }")
+        appendLine("        tr:nth-child(odd) { background-color: var(--table-row-odd); }")
+        appendLine("        code {")
+        appendLine("            font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;")
+        appendLine("            background-color: var(--code-bg); padding: 0.2em 0.4em;")
+        appendLine("            border-radius: 6px; font-size: 85%;")
+        appendLine("        }")
+        appendLine("        .badge {")
+        appendLine("            padding: 4px 8px; border-radius: 12px; font-size: 0.85em; font-weight: 600; display: inline-block;")
+        appendLine("        }")
+        appendLine("        .badge.success { background-color: rgba(46,160,67,0.2); color: var(--success-color); border: 1px solid var(--success-color); }")
+        appendLine("        .badge.warning { background-color: rgba(210,153,34,0.2); color: var(--warning-color); border: 1px solid var(--warning-color); }")
+        appendLine("        .badge.error { background-color: rgba(248,81,73,0.2); color: var(--error-color); border: 1px solid var(--error-color); }")
+        appendLine("        .badge.info { background-color: rgba(88,166,255,0.2); color: var(--accent-color); border: 1px solid var(--accent-color); }")
+        appendLine("        details {")
+        appendLine("            background: var(--details-bg); border: 1px solid var(--border-color);")
+        appendLine("            border-radius: 6px; margin: 1rem 0;")
+        appendLine("        }")
+        appendLine("        summary {")
+        appendLine("            padding: 1rem; font-weight: 600; cursor: pointer; color: var(--heading-color);")
+        appendLine("        }")
+        appendLine("        summary:hover { background: var(--table-header-bg); }")
+        appendLine("        .details-content { padding: 0 1rem 1rem 1rem; overflow-x: auto; }")
+        appendLine("        .alert {")
+        appendLine("            padding: 1rem; border-radius: 6px; border-left: 4px solid var(--accent-color);")
+        appendLine("            background: var(--card-bg); margin: 1rem 0;")
+        appendLine("        }")
+        appendLine("        footer { margin-top: 3rem; text-align: center; color: #8b949e; font-size: 0.9rem; border-top: 1px solid var(--border-color); padding-top: 1rem; }")
+        appendLine("    </style>")
+        appendLine("</head>")
+        appendLine("<body>")
+        
+        // Header
+        appendLine("<h1>🏥 Project Health Report — ${projectName.get()}</h1>")
+        appendLine("<div class=\"meta-card\">")
+        appendLine("    <p>Generated: <span>$timestamp</span></p>")
+        appendLine("    <p>Module: <code>$module</code></p>")
+        appendLine("    <p>Variant: <code>$variant</code></p>")
+        appendLine("    <p>Plugin: <code>com.anyonehub.diagnostics.health v1.0.5</code></p>")
+        appendLine("</div>")
+        
+        // Executive Summary
+        appendLine("<h2>📊 Executive Summary</h2>")
+        appendLine("<table>")
+        appendLine("    <thead><tr><th>Category</th><th>Count</th><th>Severity</th></tr></thead>")
+        appendLine("    <tbody>")
+        appendLine("        <tr><td>🔧 C++ Compiler Warnings</td><td>${cppWarnings.size}</td><td>${severityBadge(cppWarnings.size)}</td></tr>")
+        appendLine("        <tr><td>☕ Kotlin Deprecations</td><td>${kotlinWarnings.size}</td><td>${severityBadge(kotlinWarnings.size)}</td></tr>")
+        appendLine("        <tr><td>☕ Java Deprecations</td><td>${javaWarnings.size}</td><td>${severityBadge(javaWarnings.size)}</td></tr>")
+        appendLine("        <tr><td>💀 Dead Code Items (R8)</td><td>${deadCodeMetrics.totalUnused}</td><td>${severityBadge(deadCodeMetrics.totalUnused)}</td></tr>")
+        appendLine("        <tr><td>📦 Outdated Dependencies</td><td>${outdated.size}</td><td>${severityBadge(outdated.size)}</td></tr>")
+        appendLine("        <tr><td>🗑️ Potentially Unused Deps</td><td>${unused.size}</td><td>${severityBadge(unused.size)}</td></tr>")
+        appendLine("    </tbody>")
+        appendLine("</table>")
 
-        // ── Executive Summary ─────────────────────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## 📊 Executive Summary")
-        appendLine()
-        appendLine("| Category | Count | Severity |")
-        appendLine("|----------|-------|----------|")
-        appendLine("| 🔧 C++ Compiler Warnings | ${cppWarnings.size} | ${severityBadge(cppWarnings.size)} |")
-        appendLine("| ☕ Kotlin Deprecations | ${kotlinWarnings.size} | ${severityBadge(kotlinWarnings.size)} |")
-        appendLine("| ☕ Java Deprecations | ${javaWarnings.size} | ${severityBadge(javaWarnings.size)} |")
-        appendLine("| 💀 Dead Code Items (R8) | ${deadCodeMetrics.totalUnused} | ${severityBadge(deadCodeMetrics.totalUnused)} |")
-        appendLine("| 📦 Outdated Dependencies | ${outdated.size} | ${severityBadge(outdated.size)} |")
-        appendLine("| 🗑️ Potentially Unused Deps | ${unused.size} | ${severityBadge(unused.size)} |")
-        appendLine()
-
-        // ── Section 1: C++ Compiler Warnings ─────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## 🔧 C++ Compiler Warnings")
-        appendLine()
+        // C++ Compiler Warnings
+        appendLine("<h2>🔧 C++ Compiler Warnings</h2>")
         if (cppWarnings.isEmpty()) {
-            appendLine("✅ **No C++ compiler warnings detected.**")
-            appendLine()
-            appendLine("> *The `.cxx/` build tree was scanned for Clang/GCC diagnostic events.*")
+            appendLine("<div class=\"alert\">✅ <strong>No C++ compiler warnings detected.</strong><br/><small>The <code>.cxx/</code> build tree was scanned for Clang/GCC diagnostic events.</small></div>")
         } else {
-            appendLine("| Source File | Line | Col | Flag | Snippet |")
-            appendLine("|-------------|------|-----|------|---------|")
+            appendLine("<details><summary>View ${cppWarnings.size} C++ Warnings</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Source File</th><th>Line</th><th>Col</th><th>Flag</th><th>Snippet</th></tr></thead>")
+            appendLine("    <tbody>")
             cppWarnings.sortedBy { it.sourceFile }.forEach { w ->
                 val file = w.sourceFile.substringAfterLast('/')
-                val line = if (w.line > 0) "`${w.line}`" else "—"
-                val col  = if (w.column > 0) "`${w.column}`" else "—"
-                appendLine("| `$file` | $line | $col | `${w.flag}` | ${escapeMarkdown(w.snippet)} |")
+                val line = if (w.line > 0) "<code>${w.line}</code>" else "—"
+                val col  = if (w.column > 0) "<code>${w.column}</code>" else "—"
+                appendLine("        <tr><td><code>$file</code></td><td>$line</td><td>$col</td><td><span class=\"badge info\">${w.flag}</span></td><td>${escapeHtml(w.snippet)}</td></tr>")
             }
+            appendLine("    </tbody></table></div></details>")
         }
-        appendLine()
 
-        // ── Section 2: Kotlin Deprecations ───────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## ☕ Kotlin Deprecation Warnings")
-        appendLine()
+        // Kotlin Deprecations
+        appendLine("<h2>☕ Kotlin Deprecation Warnings</h2>")
         if (kotlinWarnings.isEmpty()) {
-            appendLine("✅ **No Kotlin deprecation warnings found in build reports.**")
-            appendLine()
-            appendLine("> *To enable persistent Kotlin Build Reports, add to `gradle.properties`:*")
-            appendLine("> ```")
-            appendLine("> kotlin.build.report.output=file")
-            appendLine("> kotlin.build.report.file.output.dir=build/reports/kotlin-build")
-            appendLine("> ```")
+            appendLine("<div class=\"alert\">✅ <strong>No Kotlin deprecation warnings found in build reports.</strong><br/><small>To enable persistent Kotlin Build Reports, add to <code>gradle.properties</code>:<br/><code>kotlin.build.report.output=file</code><br/><code>kotlin.build.report.file.output.dir=build/reports/kotlin-build</code></small></div>")
         } else {
-            appendLine("| Source File | Line | Col | API | Suggestion |")
-            appendLine("|-------------|------|-----|-----|------------|")
+            appendLine("<details><summary>View ${kotlinWarnings.size} Kotlin Deprecations</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Source File</th><th>Line</th><th>Col</th><th>API / Snippet</th></tr></thead>")
+            appendLine("    <tbody>")
             kotlinWarnings.sortedBy { it.sourceFile }.forEach { w ->
                 val file = w.sourceFile.substringAfterLast('/')
-                val line = if (w.line > 0) "`${w.line}`" else "—"
-                val col  = if (w.column > 0) "`${w.column}`" else "—"
-                appendLine("| `$file` | $line | $col | `${w.flag}` | ${escapeMarkdown(w.snippet)} |")
+                val line = if (w.line > 0) "<code>${w.line}</code>" else "—"
+                val col  = if (w.column > 0) "<code>${w.column}</code>" else "—"
+                appendLine("        <tr><td><code>$file</code></td><td>$line</td><td>$col</td><td>${escapeHtml(w.snippet)}</td></tr>")
             }
+            appendLine("    </tbody></table></div></details>")
         }
-        appendLine()
 
-        // ── Section 3: Java Deprecations ──────────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## ☕ Java Deprecation Warnings")
-        appendLine()
+        // Java Deprecations
+        appendLine("<h2>☕ Java Deprecation Warnings</h2>")
         if (javaWarnings.isEmpty()) {
-            appendLine("✅ **No Java deprecation warnings found.**")
+            appendLine("<div class=\"alert\">✅ <strong>No Java deprecation warnings found.</strong></div>")
         } else {
-            appendLine("| Source File | Line | Flag | Snippet |")
-            appendLine("|-------------|------|------|---------|")
+            appendLine("<details><summary>View ${javaWarnings.size} Java Deprecations</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Source File</th><th>Line</th><th>Snippet</th></tr></thead>")
+            appendLine("    <tbody>")
             javaWarnings.sortedBy { it.sourceFile }.forEach { w ->
                 val file = w.sourceFile.substringAfterLast('/')
-                val line = if (w.line > 0) "`${w.line}`" else "—"
-                appendLine("| `$file` | $line | `${w.flag}` | ${escapeMarkdown(w.snippet)} |")
+                val line = if (w.line > 0) "<code>${w.line}</code>" else "—"
+                appendLine("        <tr><td><code>$file</code></td><td>$line</td><td>${escapeHtml(w.snippet)}</td></tr>")
             }
+            appendLine("    </tbody></table></div></details>")
         }
-        appendLine()
 
-        // ── Section 4: Dead Code (R8 Analysis) ───────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## 💀 Dead Code Analysis (R8)")
-        appendLine()
+        // Dead Code (R8)
+        appendLine("<h2>💀 Dead Code Analysis (R8)</h2>")
         if (!deadCodeMetrics.r8Enabled) {
-            appendLine("> ⚠️ **[MINIFICATION DISABLED]** R8 was not active for this variant.")
-            appendLine("> Dead-code analysis requires `isMinifyEnabled = true` in the build config.")
-            appendLine("> This plugin does **not** enable R8 automatically.")
+            appendLine("<div class=\"alert\" style=\"border-left-color: var(--warning-color);\">⚠️ <strong>[MINIFICATION DISABLED]</strong> R8 was not active for this variant.<br/><small>Dead-code analysis requires <code>isMinifyEnabled = true</code> in the build config. This plugin does <strong>not</strong> enable R8 automatically.</small></div>")
         } else if (deadCodeMetrics.totalUnused == 0) {
-            appendLine("✅ **R8 removed no code** (all declared code is reachable, or keep rules cover everything).")
+            appendLine("<div class=\"alert\">✅ <strong>R8 removed no code</strong> (all declared code is reachable, or keep rules cover everything).</div>")
         } else {
-            appendLine("| Metric | Count |")
-            appendLine("|--------|-------|")
-            appendLine("| Unused Classes | ${deadCodeMetrics.unusedClasses} |")
-            appendLine("| Unused Methods | ${deadCodeMetrics.unusedMethods} |")
-            appendLine("| Unused Fields | ${deadCodeMetrics.unusedFields} |")
-            appendLine("| Unused Parameters | ${deadCodeMetrics.unusedParameters} |")
-            appendLine("| **Total Removed Items** | **${deadCodeMetrics.totalUnused}** |")
-            appendLine()
-            appendLine("> *Source: `usage.txt` in the R8 output directory (same parent as `mapping.txt`).*")
-            appendLine("> *Review ProGuard keep rules to reduce this count.*")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Metric</th><th>Count</th></tr></thead>")
+            appendLine("    <tbody>")
+            appendLine("        <tr><td>Unused Classes</td><td>${deadCodeMetrics.unusedClasses}</td></tr>")
+            appendLine("        <tr><td>Unused Methods</td><td>${deadCodeMetrics.unusedMethods}</td></tr>")
+            appendLine("        <tr><td>Unused Fields</td><td>${deadCodeMetrics.unusedFields}</td></tr>")
+            appendLine("        <tr><td>Unused Parameters</td><td>${deadCodeMetrics.unusedParameters}</td></tr>")
+            appendLine("        <tr style=\"font-weight: 600;\"><td>Total Removed Items</td><td>${deadCodeMetrics.totalUnused}</td></tr>")
+            appendLine("    </tbody>")
+            appendLine("</table>")
+            appendLine("<p><small>Source: <code>usage.txt</code> in the R8 output directory. Review ProGuard keep rules to reduce this count.</small></p>")
         }
-        appendLine()
 
-        // ── Section 5: Dependency Status ──────────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("## 📦 Dependency Status")
-        appendLine()
-
-        // 5a: Outdated
-        appendLine("### ⚠️ Outdated Dependencies")
-        appendLine()
+        // Dependencies
+        appendLine("<h2>📦 Dependency Status</h2>")
+        
+        appendLine("<h3>⚠️ Outdated Dependencies</h3>")
         if (outdated.isEmpty()) {
-            appendLine("✅ **All checked dependencies are up-to-date.**")
+            appendLine("<div class=\"alert\">✅ <strong>All checked dependencies are up-to-date.</strong></div>")
         } else {
-            appendLine("| Dependency | Current | Latest | Gap |")
-            appendLine("|------------|---------|--------|-----|")
+            appendLine("<details><summary>View ${outdated.size} Outdated Dependencies</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Dependency</th><th>Current</th><th>Latest</th><th>Gap</th></tr></thead>")
+            appendLine("    <tbody>")
             outdated.sortedBy { it.groupId }.forEach { dep ->
-                val gap = versionGapLabel(dep.currentVersion, dep.latestVersion)
-                appendLine("| `${dep.groupId}:${dep.artifactId}` | `${dep.currentVersion}` | `${dep.latestVersion ?: "unknown"}` | $gap |")
+                val gap = versionGapLabelHtml(dep.currentVersion, dep.latestVersion)
+                appendLine("        <tr><td><code>${dep.groupId}:${dep.artifactId}</code></td><td><code>${dep.currentVersion}</code></td><td><code>${dep.latestVersion ?: "unknown"}</code></td><td>$gap</td></tr>")
             }
+            appendLine("    </tbody></table></div></details>")
         }
-        appendLine()
 
-        // 5b: Unused
-        appendLine("### 🗑️ Potentially Unused Dependencies")
-        appendLine()
-        appendLine("> *A dependency is flagged when none of its exported packages appear in*")
-        appendLine("> *the project's compiled bytecode. Runtime-only (DI, SPI) deps may appear*")
-        appendLine("> *here as false positives — verify before removing.*")
-        appendLine()
+        appendLine("<h3>🗑️ Potentially Unused Dependencies</h3>")
         if (unused.isEmpty()) {
-            appendLine("✅ **No obviously unused dependencies detected.**")
+            appendLine("<div class=\"alert\">✅ <strong>No obviously unused dependencies detected.</strong></div>")
         } else {
-            appendLine("| Dependency | Version | Reason |")
-            appendLine("|------------|---------|--------|")
+            appendLine("<p><small>A dependency is flagged when none of its exported packages appear in the project's compiled bytecode. Runtime-only (DI, SPI) deps may appear here as false positives — verify before removing.</small></p>")
+            appendLine("<details><summary>View ${unused.size} Unused Dependencies</summary><div class=\"details-content\">")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Dependency</th><th>Version</th><th>Reason</th></tr></thead>")
+            appendLine("    <tbody>")
             unused.sortedBy { it.groupId }.forEach { dep ->
-                appendLine("| `${dep.groupId}:${dep.artifactId}` | `${dep.currentVersion}` | ${dep.unusedReason} |")
+                appendLine("        <tr><td><code>${dep.groupId}:${dep.artifactId}</code></td><td><code>${dep.currentVersion}</code></td><td>${dep.unusedReason}</td></tr>")
             }
+            appendLine("    </tbody></table></div></details>")
         }
-        appendLine()
 
-        // 5c: Network errors (if any)
         val networkErrors = allDependencies.filter { it.networkError != null }
         if (networkErrors.isNotEmpty()) {
-            appendLine("### ❌ Version-Check Errors")
-            appendLine()
-            appendLine("| Dependency | Error |")
-            appendLine("|------------|-------|")
+            appendLine("<h3>❌ Version-Check Errors</h3>")
+            appendLine("<table>")
+            appendLine("    <thead><tr><th>Dependency</th><th>Error</th></tr></thead>")
+            appendLine("    <tbody>")
             networkErrors.forEach { dep ->
-                appendLine("| `${dep.groupId}:${dep.artifactId}` | ${dep.networkError} |")
+                appendLine("        <tr><td><code>${dep.groupId}:${dep.artifactId}</code></td><td>${dep.networkError}</td></tr>")
             }
-            appendLine()
+            appendLine("    </tbody></table>")
         }
 
-        // ── Footer ────────────────────────────────────────────────────────────
-        appendLine("---")
-        appendLine()
-        appendLine("*Generated by the `ProjectHealthPlugin` — a headless, read-only Gradle diagnostic plugin.*")
-        appendLine("*This report does not modify build configuration and is safe to run on any build.*")
+        // Footer
+        appendLine("<footer>")
+        appendLine("    Generated by the <code>ProjectHealthPlugin</code> — a headless, read-only Gradle diagnostic plugin.<br/>")
+        appendLine("    This report does not modify build configuration and is safe to run on any build.")
+        appendLine("</footer>")
+        appendLine("</body>")
+        appendLine("</html>")
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Markdown utilities
+    // HTML utilities
     // ─────────────────────────────────────────────────────────────────────────
 
-    /** Returns a severity badge string based on a warning/issue count. */
+    /** Returns an HTML span badge based on a warning/issue count. */
     private fun severityBadge(count: Int): String = when {
-        count == 0  -> "✅ None"
-        count <= 5  -> "🟡 Low ($count)"
-        count <= 20 -> "🟠 Medium ($count)"
-        else        -> "🔴 High ($count)"
+        count == 0  -> "<span class=\"badge success\">✅ None</span>"
+        count <= 5  -> "<span class=\"badge warning\">🟡 Low ($count)</span>"
+        count <= 20 -> "<span class=\"badge warning\">🟠 Medium ($count)</span>"
+        else        -> "<span class=\"badge error\">🔴 High ($count)</span>"
     }
 
-    /**
-     * Provides a human-readable label for the version gap between [current] and [latest].
-     * Uses semver major/minor/patch classification.
-     */
-    private fun versionGapLabel(current: String, latest: String?): String {
-        if (latest == null) return "Unknown"
+    /** Provides a human-readable HTML label for the version gap. */
+    private fun versionGapLabelHtml(current: String, latest: String?): String {
+        if (latest == null) return "<span class=\"badge\">Unknown</span>"
         val cur = current.split(".").mapNotNull { it.toIntOrNull() }
         val lat = latest.split(".").mapNotNull { it.toIntOrNull() }
         return when {
-            lat.getOrElse(0) { 0 } > cur.getOrElse(0) { 0 } -> "🔴 Major"
-            lat.getOrElse(1) { 0 } > cur.getOrElse(1) { 0 } -> "🟠 Minor"
-            lat.getOrElse(2) { 0 } > cur.getOrElse(2) { 0 } -> "🟡 Patch"
-            else -> "✅ Current"
+            lat.getOrElse(0) { 0 } > cur.getOrElse(0) { 0 } -> "<span class=\"badge error\">🔴 Major</span>"
+            lat.getOrElse(1) { 0 } > cur.getOrElse(1) { 0 } -> "<span class=\"badge warning\">🟠 Minor</span>"
+            lat.getOrElse(2) { 0 } > cur.getOrElse(2) { 0 } -> "<span class=\"badge warning\">🟡 Patch</span>"
+            else -> "<span class=\"badge success\">✅ Current</span>"
         }
     }
 
-    /** Escapes Markdown table cell content (pipes and backticks). */
-    private fun escapeMarkdown(text: String): String =
-        text.replace("|", "\\|").replace("`", "'")
+    /** Escapes HTML special characters. */
+    private fun escapeHtml(text: String): String =
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 }
