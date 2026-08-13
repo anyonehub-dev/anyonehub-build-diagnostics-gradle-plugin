@@ -12,12 +12,13 @@ import com.anyonehub.diagnostics.model.CompilerWarning
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.UntrackedTask
 import java.io.File
 
 /**
@@ -34,7 +35,25 @@ import java.io.File
  * kotlin.build.report.output=file in gradle.properties), and from the Gradle
  * tmp directories for persisted warning output files.
  */
-@CacheableTask
+/**
+ * Pipeline A2 — Compiler Diagnostics Task.
+ *
+ * Reads compiler warnings from two sources:
+ *  1. `collectorServiceOutput` — written by [com.anyonehub.diagnostics.service.CompilerOutputCollectorService]
+ *     at build completion (via `BuildService.close()`). This file is produced DURING the build
+ *     by the BuildService, so it cannot be declared as `@InputFile` — it does not exist at
+ *     Gradle's UP-TO-DATE check time on a clean build. Using `@Internal` is the correct
+ *     Gradle pattern for BuildService-produced transient files.
+ *  2. Static log directories (`.cxx`, `reports/kotlin-build`, `tmp/`) declared as `@InputFiles`.
+ *
+ * ## Why @UntrackedTask (not @CacheableTask)
+ * Since the primary compiler-warning source is `collectorServiceOutput` (a BuildService output
+ * that is inherently non-deterministic across machines), this task's outputs cannot be safely
+ * restored from a shared build cache. `@UntrackedTask` ensures the task always executes fresh
+ * and prevents stale cached reports from appearing on CI. This is the correct replacement for
+ * the DEFECT-6 pattern (erroneously using @CacheableTask with an @Internal primary input).
+ */
+@UntrackedTask(because = "Consumes out-of-band BuildService output")
 abstract class CompilerDiagnosticsTask : DefaultTask() {
 
     @get:InputFiles
@@ -54,12 +73,19 @@ abstract class CompilerDiagnosticsTask : DefaultTask() {
     abstract val javaTmpDir: ConfigurableFileCollection
 
     /**
-     * Output file from the [CompilerOutputCollectorService] BuildService.
-     * This is the PRIMARY source for Kotlin/Java deprecation warnings,
-     * intercepted live from compiler stderr during task execution.
-     * Falls back gracefully when the file doesn't exist (e.g., no compile tasks ran).
+     * Output file from the [com.anyonehub.diagnostics.service.CompilerOutputCollectorService].
+     * This is the PRIMARY source for Kotlin/Java deprecation warnings, intercepted live
+     * from compiler stderr during task execution via `BuildService.close()`.
+     *
+     * ## Why @Internal (not @InputFile)
+     * This file is written by the BuildService at the END of compilation — i.e., it does not
+     * exist when Gradle performs its UP-TO-DATE check before any task runs. Gradle 9.x
+     * validation rejects `@InputFile` on a property whose file does not yet exist, even with
+     * `@Optional`. `@Internal` is the correct annotation for BuildService-produced transient
+     * files. The stale-cache concern (DEFECT-6) is addressed by `@UntrackedTask` above,
+     * which prevents this task from ever being restored from a stale build cache entry.
      */
-    @get:org.gradle.api.tasks.Internal
+    @get:Internal
     abstract val collectorServiceOutput: RegularFileProperty
 
     @get:OutputFile

@@ -16,6 +16,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.CacheableTask
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
@@ -39,16 +40,28 @@ import java.time.format.DateTimeFormatter
 @CacheableTask
 abstract class AggregateProjectHealthReportTask : DefaultTask() {
 
-    /** Intermediate dead-code metrics from [GenerateDeadCodeReportTask]. */
-    @get:Internal
+    /**
+     * Intermediate dead-code metrics from [GenerateDeadCodeReportTask].
+     *
+     * DEFECT-5 fix: was `@Internal` which made Gradle consider this task always
+     * up-to-date regardless of upstream changes. Now `@InputFile` so the cache
+     * key is correctly computed from all three intermediate pipeline outputs.
+     */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    @get:Optional
     abstract val deadCodeIntermediateFile: RegularFileProperty
 
     /** Intermediate compiler warnings from [CompilerDiagnosticsTask]. */
-    @get:Internal
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    @get:Optional
     abstract val compilerIntermediateFile: RegularFileProperty
 
     /** Intermediate dependency statuses from [DependencyDiagnosticsTask]. */
-    @get:Internal
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    @get:Optional
     abstract val dependencyIntermediateFile: RegularFileProperty
 
     /** The final Markdown report output. */
@@ -112,6 +125,10 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
             variant = variant,
             module = module,
             cppWarnings = cppWarnings,
+            deprecations = deprecations,
+            kotlin24Redundancies = kotlin24Redundancies,
+            antlrUnsafe = antlrUnsafe,
+            javaCompilerWarnings = javaCompilerWarnings,
             kotlinWarnings = kotlinWarnings,
             javaWarnings = javaWarnings,
             deadCodeMetrics = deadCodeMetrics,
@@ -163,6 +180,10 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         variant: String,
         module: String,
         cppWarnings: List<CompilerWarning>,
+        deprecations: List<CompilerWarning>,
+        kotlin24Redundancies: List<CompilerWarning>,
+        antlrUnsafe: List<CompilerWarning>,
+        javaCompilerWarnings: List<CompilerWarning>,
         kotlinWarnings: List<CompilerWarning>,
         javaWarnings: List<CompilerWarning>,
         deadCodeMetrics: DeadCodeMetrics,
@@ -256,7 +277,7 @@ abstract class AggregateProjectHealthReportTask : DefaultTask() {
         appendLine("    <p>Generated: <span>$timestamp</span></p>")
         appendLine("    <p>Module: <code>$module</code></p>")
         appendLine("    <p>Variant: <code>$variant</code></p>")
-        appendLine("    <p>Plugin: <code>com.anyonehub.diagnostics.health v1.1.0</code></p>")
+        appendLine("    <p>Plugin: <code>com.anyonehub.diagnostics.health v1.1.2</code></p>")
         appendLine("</div>")
         
         // Executive Summary

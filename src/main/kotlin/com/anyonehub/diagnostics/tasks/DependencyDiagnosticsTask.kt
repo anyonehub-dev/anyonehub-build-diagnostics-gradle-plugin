@@ -4,20 +4,20 @@
 // GUARDRAILS:
 // ✅ READ-ONLY      — resolves runtimeClasspath via ArtifactView; no config mutations.
 // ✅ NON-BLOCKING   — network checks run via WorkerExecutor.noIsolation() WorkAction.
+//                    Daemon thread is NEVER blocked (DEFECT-1 fix: removed Future.get()).
 // ✅ LAZY           — all inputs are Provider<T> / @InputFiles; zero eager resolution.
 // ✅ CI-SAFE        — network disabled via -PhealthCheckNetwork=false; fully offline.
 
 package com.anyonehub.diagnostics.tasks
 
 import com.anyonehub.diagnostics.model.DependencyStatus
-import com.anyonehub.diagnostics.worker.DependencyVersionChecker
+import com.anyonehub.diagnostics.worker.VersionCheckWorkAction
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
@@ -26,9 +26,9 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
 import org.gradle.kotlin.dsl.*
+import org.gradle.workers.WorkerExecutor
 import java.io.File
-import java.util.concurrent.Executors
-import java.util.concurrent.Future
+import javax.inject.Inject
 
 /**
  * Pipeline B — Dependency Diagnostics Task.
@@ -58,7 +58,9 @@ import java.util.concurrent.Future
 // Bytecode scanning reads machine-local intermediates that differ across CI workers.
 @UntrackedTask(because = "Performs live network checks against Maven repositories and scans " +
         "machine-local bytecode intermediates; outputs are not safe to cache across builds or machines.")
-abstract class DependencyDiagnosticsTask : DefaultTask() {
+abstract class DependencyDiagnosticsTask @Inject constructor(
+    private val workerExecutor: WorkerExecutor,
+) : DefaultTask() {
 
     /**
      * JARs resolved from the `runtimeClasspath` configuration via `ArtifactView`.
@@ -299,30 +301,45 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
     // Worker submission
     // ─────────────────────────────────────────────────────────────────────────
 
+    /**
+     * Submits one [VersionCheckWorkAction] per declared coordinate to Gradle's managed
+     * thread pool via [WorkerExecutor.noIsolation].
+     *
+     * The call to [org.gradle.workers.WorkQueue.await] blocks ONLY the current task's
+     * worker thread — not the Gradle daemon's main thread — allowing Gradle to continue
+     * scheduling other tasks in parallel while version checks complete.
+     *
+     * This replaces the previous `Executors.newFixedThreadPool(8)` + `Future.get()` pattern
+     * (DEFECT-1) which held the daemon thread for up to `⌈N/8⌉ × 20 seconds`.
+     */
     private fun submitVersionCheckWorkers(
         coordinates: List<String>,
         workerOutputDir: File,
     ) {
-        val executor = Executors.newFixedThreadPool(8)
-        val futures = mutableListOf<Future<*>>()
+        val queue = workerExecutor.noIsolation()
 
         coordinates.forEach { coord ->
             val parts = coord.split(":")
             if (parts.size < 3) return@forEach
 
-            val group = parts[0]
+            val group   = parts[0]
             val artifact = parts[1]
-            val version = parts[2]
-            val safeKey = "${group.replace('.', '_')}__${artifact.replace('.', '_')}.txt"
+            val version  = parts[2]
+            val safeKey  = "${group.replace('.', '_')}__${artifact.replace('.', '_')}.txt"
             val workerOutput = File(workerOutputDir, safeKey)
 
-            futures.add(executor.submit {
-                DependencyVersionChecker.checkVersion(group, artifact, version, workerOutput)
-            })
+            queue.submit(VersionCheckWorkAction::class.java) { params ->
+                params.group.set(group)
+                params.artifact.set(artifact)
+                params.currentVersion.set(version)
+                params.outputFile.set(workerOutput)
+            }
         }
-        
-        futures.forEach { it.get() }
-        executor.shutdown()
+
+        // Block only this task's worker thread until all version-check workers complete,
+        // then proceed to collectWorkerResults(). Gradle can schedule other tasks
+        // on other threads while we wait — unlike the old Future.get() pattern.
+        queue.await()
     }
 
     /**

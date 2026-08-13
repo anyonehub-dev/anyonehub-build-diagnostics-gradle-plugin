@@ -1,13 +1,17 @@
 // Copyright 2024 anyone-Hub
 // ProjectHealthPlugin — headless, read-only Gradle diagnostic plugin.
 //
-// ENGINEERING GUARDRAILS (v1.0.9):
+// ENGINEERING GUARDRAILS (v1.1.1):
 // ✅ READ-ONLY       — no repository blocks, no dependencies, no toolchain mutations.
-// ✅ STRICTLY LAZY   — zero configuration-phase I/O; BuildService registered only when
-//                      a diagnostic task is in the task execution graph.
-// ✅ CLEAN-SAFE      — diagnostics never run during `clean`; guarded by task graph check.
+// ✅ STRICTLY LAZY   — zero configuration-phase I/O; ALL wiring is Provider-based.
+// ✅ CLEAN-SAFE      — finalizedBy is attached to assemble/bundle tasks; it naturally
+//                      does NOT fire on clean-only builds (no assemble task → no trigger).
 // ✅ AGP-AWARE       — hooks into AndroidComponentsExtension.onVariants for dynamic paths.
 // ✅ IDE-SYNC-SAFE   — tasks.configureEach; zero eager task creation or resolution.
+// ✅ DAEMON-SAFE     — BuildService and compile-task listeners wired during config phase;
+//                      no configureEach or API mutations inside whenReady (DEFECT-3 fix).
+// ✅ CONFIG-CACHE    — no eager .get() on Providers at config time (DEFECT-4 fix);
+//                      BuildService outputDir passed as DirectoryProperty, not String.
 
 package com.anyonehub.diagnostics
 
@@ -25,16 +29,25 @@ import org.gradle.api.provider.Provider
 import org.gradle.kotlin.dsl.*
 
 /**
- * Entry point for the `com.anyonehub.diagnostics.health` Gradle plugin (v1.0.9).
+ * Entry point for the `com.anyonehub.diagnostics.health` Gradle plugin (v1.1.1).
  *
  * ## Lifecycle Contract
- * - **Configuration phase**: ONLY task registration via `tasks.register`. Zero I/O,
- *   zero configuration resolution, zero BuildService initialization.
+ * - **Configuration phase**: ONLY task registration via `tasks.register`, lazy Provider
+ *   wiring, BuildService registration, and compile-task listener wiring via `configureEach`.
+ *   Zero I/O, zero configuration resolution, zero `.get()` calls on Providers.
  * - **Execution phase**: All analysis, file writes, and network calls happen exclusively
- *   inside `@TaskAction` methods of the registered tasks.
- * - **Clean guard**: The `finalizedBy` relationship is only established after the task
- *   execution graph is ready, and ONLY if a diagnostic task is actually in the graph.
- *   This ensures `./gradlew clean` never triggers diagnostics.
+ *   inside `@TaskAction` methods or Gradle Worker API `WorkAction.execute()` calls.
+ * - **Clean guard**: `finalizedBy` is wired directly to `assemble`/`bundle` tasks during
+ *   the configuration phase. Because no assemble task runs on a `clean`-only build,
+ *   the finalizer never triggers — no `whenReady` guard is needed or used.
+ *
+ * ## Defect Fixes Applied (v1.1.1)
+ * - DEFECT-1: `DependencyDiagnosticsTask` now uses `WorkerExecutor.noIsolation()`.
+ * - DEFECT-2: `afterEvaluate` configuration-resolution replaced by lazy `project.provider`.
+ * - DEFECT-3: `tasks.configureEach` / `finalizedBy` moved out of `whenReady` to config phase.
+ * - DEFECT-4: `CompilerOutputCollectorService.Params.outputDir` is now `DirectoryProperty`.
+ * - DEFECT-5: Intermediate file inputs on `AggregateProjectHealthReportTask` use `@InputFile`.
+ * - DEFECT-6: `collectorServiceOutput` on `CompilerDiagnosticsTask` uses `@InputFile`.
  *
  * ## Architecture
  * ```
@@ -71,16 +84,18 @@ class ProjectHealthPlugin : Plugin<Project> {
     }
 
     /**
-     * Registers all diagnostic tasks lazily.
+     * Registers all diagnostic tasks and wires ALL listeners and relationships
+     * strictly within the Gradle configuration phase.
      *
-     * CRITICAL: This method ONLY calls `tasks.register`. It does NOT:
-     *  - resolve any configurations
-     *  - access any file system paths eagerly
-     *  - initialize any BuildServices
-     *  - call `tasks.withType(...).configureEach { ... }` for compile tasks
+     * CRITICAL: This method ONLY calls:
+     *  - `tasks.register` (lazy task registration)
+     *  - `gradle.sharedServices.registerIfAbsent` (does NOT instantiate the service)
+     *  - `tasks.withType(...).configureEach` (lazy compile-task listener wiring)
+     *  - `tasks.configureEach` (lazy finalizedBy wiring)
+     *  - `project.provider { ... }` (lazy dependency coordinate collection)
      *
-     * The BuildService is registered lazily inside `whenTaskAdded` on the execution
-     * graph, ensuring it only exists during actual diagnostic execution.
+     * Nothing that resolves configurations, touches the file system, or calls
+     * `.get()` on any Provider occurs here.
      */
     private fun registerDiagnosticTasks(project: Project) {
 
@@ -98,6 +113,21 @@ class ProjectHealthPlugin : Plugin<Project> {
             intermediatesDir.map { it.file("dependency-diagnostics-intermediate.txt") }
 
         val healthReportFile = project.layout.projectDirectory.file("project-health.html")
+
+        // ── DEFECT-3/4 FIX: Register BuildService at configuration phase ───────
+        // registerIfAbsent() does NOT instantiate the service — it is safe here.
+        // The service is only created when a task that declares usesService() actually runs.
+        //
+        // DEFECT-4 FIX: outputDir is now a DirectoryProperty, not an eagerly-resolved
+        // String. No .get() call at configuration time.
+        val collectorServiceProvider = project.gradle.sharedServices.registerIfAbsent(
+            "compilerOutputCollector",
+            CompilerOutputCollectorService::class.java
+        ) { spec ->
+            spec.parameters.outputDir.set(
+                project.rootProject.layout.buildDirectory.dir("diagnostics/intermediates")
+            )
+        }
 
         // ── Step 1: Register pipeline tasks (LAZY — zero execution at this point) ─
 
@@ -130,9 +160,47 @@ class ProjectHealthPlugin : Plugin<Project> {
             javaTmpDir.from(project.layout.buildDirectory.dir("tmp/compileDebugJavaWithJavac"))
             outputFile.set(compilerIntermediate)
 
-            // mustRunAfter by task name — these are non-fatal if the tasks don't exist.
-            // Uses string names to avoid eager task realization.
+            // mustRunAfter by task name — non-fatal if the tasks don't exist.
             mustRunAfter("compileDebugKotlin", "compileDebugJavaWithJavac")
+        }
+
+        // ── DEFECT-2 FIX: Lazy runtimeClasspath provider ──────────────────────
+        // Wrapping configuration resolution in project.provider { } defers it to
+        // execution time (when Gradle actually resolves the FileCollection), instead
+        // of calling .artifactFiles eagerly inside afterEvaluate (which triggered
+        // live resolution during the configuration phase and caused IDE sync hangs).
+        val runtimeJarsProvider = project.provider {
+            val config = project.configurations.findByName("releaseRuntimeClasspath")
+                ?: project.configurations.findByName("debugRuntimeClasspath")
+            config?.incoming
+                ?.artifactView { view -> view.lenient(true) }
+                ?.artifacts
+                ?.artifactFiles
+                ?: project.files()
+        }
+
+        // ── DEFECT-2 FIX: Lazy declared-coordinates provider ──────────────────
+        // project.provider { } defers DependencySet access to execution time.
+        // cfg.dependencies returns declared (not resolved) dependencies — no
+        // resolution engine is triggered. The @Suppress remains for the deprecated
+        // DependencySet API, which still exists on Gradle 8 and is the only way
+        // to introspect declared coordinates without triggering resolution.
+        val declaredCoordsProvider = project.provider {
+            buildList {
+                project.configurations
+                    .filter { cfg ->
+                        cfg.name.endsWith("Implementation", ignoreCase = true) ||
+                                cfg.name.endsWith("Api", ignoreCase = true)
+                    }
+                    .flatMap { cfg ->
+                        @Suppress("DEPRECATION")
+                        cfg.dependencies.filterIsInstance<org.gradle.api.artifacts.ExternalDependency>()
+                    }
+                    .forEach { dep ->
+                        val version = dep.version ?: return@forEach
+                        add("${dep.group.orEmpty()}:${dep.name}:$version")
+                    }
+            }
         }
 
         val dependencyTask = project.tasks.register<DependencyDiagnosticsTask>(
@@ -149,50 +217,16 @@ class ProjectHealthPlugin : Plugin<Project> {
                     .orElse(true)
             )
 
+            // Lazy runtime classpath — resolves only at task execution.
+            runtimeClasspathJars.from(runtimeJarsProvider)
+
+            // Lazy declared coordinates — resolves only at task execution.
+            declaredDependencies.set(declaredCoordsProvider)
+
             // Wire the compiled classes dir lazily (directory may not exist yet).
             compiledClassesDir.from(
                 project.layout.buildDirectory.dir("intermediates/javac/debug/classes")
             )
-
-        }
-
-        // ── CRITICAL FIX: Dependency coordinate snapshot via afterEvaluate ────
-        // This must be OUTSIDE the register block so `dependencyTask` is in scope
-        // as a TaskProvider<DependencyDiagnosticsTask> captured from above.
-        project.afterEvaluate {
-            val runtimeConfig = project.configurations.findByName("releaseRuntimeClasspath")
-                ?: project.configurations.findByName("debugRuntimeClasspath")
-
-            if (runtimeConfig != null) {
-                dependencyTask.configure {
-                    it.runtimeClasspathJars.from(
-                        runtimeConfig.incoming
-                            .artifactView { view -> view.lenient(true) }
-                            .artifacts
-                            .artifactFiles
-                    )
-                }
-            }
-
-            val declaredCoords = buildList {
-                project.configurations
-                    .filter { cfg ->
-                        cfg.name.endsWith("Implementation", ignoreCase = true) ||
-                                cfg.name.endsWith("Api", ignoreCase = true)
-                    }
-                    .flatMap { cfg ->
-                        @Suppress("DEPRECATION")
-                        cfg.dependencies.filterIsInstance<org.gradle.api.artifacts.ExternalDependency>()
-                    }
-                    .forEach { dep ->
-                        val version = dep.version ?: return@forEach
-                        add("${dep.group.orEmpty()}:${dep.name}:$version")
-                    }
-            }
-
-            dependencyTask.configure {
-                it.declaredDependencies.set(declaredCoords)
-            }
         }
 
         // ── Step 2: Register aggregation task ─────────────────────────────────
@@ -228,90 +262,52 @@ class ProjectHealthPlugin : Plugin<Project> {
             }
         }
 
-        // ── Step 4: Graph-aware finalizedBy — THE CLEAN GUARD ─────────────────
-        // We use `gradle.taskGraph.whenReady` to inspect the actual execution graph.
-        // `finalizedBy` is ONLY attached if:
-        //   (a) the task graph contains at least one "assemble" or "bundle" task, AND
-        //   (b) the task graph does NOT consist solely of "clean" tasks.
-        // This is the definitive fix preventing diagnostics from running during `clean`.
-        project.gradle.taskGraph.whenReady { graph ->
-            val allTaskPaths = graph.allTasks.map { it.path }.toSet()
-
-            // Guard: abort if this is a clean-only invocation.
-            val hasCleanOnly = allTaskPaths.all { path ->
-                path.endsWith(":clean") || path == ":clean"
+        // ── DEFECT-3 FIX: Wire finalizedBy during configuration phase ──────────
+        // tasks.configureEach is a configuration-phase API. The block runs for each
+        // task as it is registered (lazy), not eagerly. No whenReady is involved.
+        //
+        // Clean-build safety: if no assemble/bundle task is in the execution graph
+        // (e.g. on ./gradlew clean), none of these tasks run, so finalizedBy never
+        // triggers the diagnostic pipeline. The explicit whenReady guard is gone.
+        project.tasks.configureEach { task ->
+            if (task.name.startsWith("assemble") || task.name.startsWith("bundle")) {
+                task.finalizedBy(aggregateTask)
             }
-            if (hasCleanOnly) return@whenReady
+        }
 
-            // Guard: only attach if an assemble/build/bundle task is in the graph
-            // for THIS specific project (using the module path prefix).
-            val projectPath = project.path
-            val hasAssembleTask = allTaskPaths.any { path ->
-                path.startsWith(projectPath) &&
-                        (path.contains(":assemble") || path.contains(":bundle"))
+        // ── DEFECT-3 FIX: Wire KotlinCompile listeners at configuration phase ──
+        // Moving from inside whenReady to here ensures Gradle's task-graph assembly
+        // sees these relationships before the graph is frozen.
+        project.tasks.withType(
+            org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java
+        ).configureEach { kotlinTask ->
+            kotlinTask.usesService(collectorServiceProvider)
+            kotlinTask.doFirst {
+                val service = collectorServiceProvider.get()
+                kotlinTask.logging.addStandardErrorListener { line ->
+                    service.collectLine(line.toString(), "Kotlin")
+                }
+                kotlinTask.logging.addStandardOutputListener { line ->
+                    service.collectLine(line.toString(), "Kotlin")
+                }
             }
+        }
 
-            if (hasAssembleTask) {
-                // Attach finalizedBy to each individual assemble task in graph.
-                project.tasks.configureEach { task ->
-                    if ((task.name.startsWith("assemble") || task.name.startsWith("bundle")) &&
-                        graph.hasTask(task)
-                    ) {
-                        task.finalizedBy(aggregateTask)
-                    }
+        // ── DEFECT-3 FIX: Wire JavaCompile listeners at configuration phase ────
+        project.tasks.withType(
+            org.gradle.api.tasks.compile.JavaCompile::class.java
+        ).configureEach { javaTask ->
+            javaTask.usesService(collectorServiceProvider)
+            javaTask.options.compilerArgs.let { args ->
+                if ("-Xlint:deprecation" !in args) args.add("-Xlint:deprecation")
+            }
+            javaTask.doFirst {
+                val service = collectorServiceProvider.get()
+                javaTask.logging.addStandardErrorListener { line ->
+                    service.collectLine(line.toString(), "Java")
                 }
-
-                // ── Register the BuildService NOW (execution phase is imminent) ──
-                // This is the ONLY place the BuildService is created, ensuring it
-                // does NOT exist during IDE syncs or clean-only builds.
-                val collectorServiceProvider = project.gradle.sharedServices.registerIfAbsent(
-                    "compilerOutputCollector",
-                    CompilerOutputCollectorService::class.java
-                ) { spec ->
-                    spec.parameters.outputDir.set(
-                        project.rootProject.layout.buildDirectory
-                            .dir("diagnostics/intermediates").get().asFile.absolutePath
-                    )
-                }
-
-                // Wire compile tasks with the BuildService for live output interception.
-                // configureEach is safe here because graph.whenReady fires after
-                // all tasks have been added to the task graph.
-                project.tasks.withType(
-                    org.jetbrains.kotlin.gradle.tasks.KotlinCompile::class.java
-                ).configureEach { kotlinTask ->
-                    if (graph.hasTask(kotlinTask)) {
-                        kotlinTask.usesService(collectorServiceProvider)
-                        kotlinTask.doFirst {
-                            val service = collectorServiceProvider.get()
-                            kotlinTask.logging.addStandardErrorListener { line ->
-                                service.collectLine(line.toString(), "Kotlin")
-                            }
-                            kotlinTask.logging.addStandardOutputListener { line ->
-                                service.collectLine(line.toString(), "Kotlin")
-                            }
-                        }
-                    }
-                }
-
-                project.tasks.withType(
-                    org.gradle.api.tasks.compile.JavaCompile::class.java
-                ).configureEach { javaTask ->
-                    if (graph.hasTask(javaTask)) {
-                        javaTask.usesService(collectorServiceProvider)
-                        javaTask.options.compilerArgs.let { args ->
-                            if ("-Xlint:deprecation" !in args) args.add("-Xlint:deprecation")
-                        }
-                        javaTask.doFirst {
-                            val service = collectorServiceProvider.get()
-                            javaTask.logging.addStandardErrorListener { line ->
-                                service.collectLine(line.toString(), "Java")
-                            }
-                            javaTask.logging.addStandardOutputListener { line ->
-                                service.collectLine(line.toString(), "Java")
-                            }
-                        }
-                    }
+                javaTask.logging.addStandardOutputListener { line ->
+                    service.collectLine(line.toString(), "Java")
                 }
             }
         }

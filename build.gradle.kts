@@ -33,7 +33,7 @@ gradlePlugin {
 }
 
 group = "io.github.anyonehub-dev"
-version = "1.1.0"
+version = "1.1.2"
 
 mavenPublishing {
     publishToMavenCentral()

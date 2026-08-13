@@ -10,7 +10,7 @@
 package com.anyonehub.diagnostics.service
 
 import com.anyonehub.diagnostics.model.CompilerWarning
-import org.gradle.api.provider.Property
+import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 import org.gradle.tooling.events.FinishEvent
@@ -37,8 +37,13 @@ abstract class CompilerOutputCollectorService :
     AutoCloseable {
 
     interface Params : BuildServiceParameters {
-        /** Directory where the service writes its output file. */
-        val outputDir: Property<String>
+        /**
+         * Directory where the service writes `compiler-service-output.txt`.
+         * Passed as a [DirectoryProperty] (lazy) — never resolved at configuration time.
+         * DEFECT-4 fix: was previously Property<String>, which required an eager .get()
+         * call in ProjectHealthPlugin to extract an absolute path string.
+         */
+        val outputDir: DirectoryProperty
     }
 
     /**
@@ -160,8 +165,8 @@ abstract class CompilerOutputCollectorService :
      * writing partial data while compile tasks are still running.
      */
     override fun close() {
-        val outDirStr = parameters.outputDir.orNull ?: return
-        val outputFile = File(outDirStr, "compiler-service-output.txt")
+        val outDir = parameters.outputDir.orNull?.asFile ?: return
+        val outputFile = File(outDir, "compiler-service-output.txt")
         outputFile.parentFile?.mkdirs()
         val warnings = collectedWarnings.toList()
         if (warnings.isNotEmpty()) {
