@@ -3,13 +3,13 @@
 ![Project Health Plugin Banner](/home/anyone-hub/.gemini/antigravity-ide/brain/8e76a0c7-48cf-4463-97b9-edd56bd92d47/health_plugin_banner_1785828905751.png)
 
 # Anyone-Hub Project Health Diagnostics Plugin
-**Version 1.0.2** | **Gradle Plugin**
+**Version 1.1.4** | **Gradle Plugin**
 
-[![Maven Central](https://img.shields.io/badge/Maven_Central-v1.0.2-blue?style=for-the-badge&logo=apachemaven)](https://search.maven.org/artifact/io.github.anyonehub-dev/diagnostics)
+[![Maven Central](https://img.shields.io/badge/Maven_Central-v1.1.4-blue?style=for-the-badge&logo=apachemaven)](https://search.maven.org/artifact/io.github.anyonehub-dev/diagnostics)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.10-purple?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
 [![Gradle](https://img.shields.io/badge/Gradle-9.3.1-02303A?style=for-the-badge&logo=gradle)](https://gradle.org)
 
-A completely headless, read-only Gradle diagnostic plugin for Android and JVM projects that aggregates compiler warnings, detects dead code, and analyzes dependency health across multi-module builds, outputting everything to a clean Markdown report.
+A completely headless, read-only Gradle diagnostic plugin for Android and JVM projects that aggregates compiler warnings, detects dead code, and analyzes dependency health across multi-module builds, outputting everything to a clean HTML report.
 
 </div>
 
@@ -19,7 +19,7 @@ A completely headless, read-only Gradle diagnostic plugin for Android and JVM pr
 
 The **Project Health Plugin** (`io.github.anyonehub-dev.diagnostics`) is designed to effortlessly plug into massive multi-module codebases without mutating your build graph or pushing unwanted repositories. 
 
-It hooks into the Gradle execution lifecycle to harvest diagnostic metrics and generates a rich `project-health.md` report locally in each evaluated module. 
+It hooks into the Gradle execution lifecycle to harvest diagnostic metrics and generates a rich `project-health.html` report locally in each evaluated module. 
 
 ### Core Philosophy
 > [!IMPORTANT]  
@@ -53,7 +53,7 @@ To apply the plugin, include it in your root `build.gradle.kts` (to apply to all
 
 ```kotlin
 plugins {
-    id("io.github.anyonehub-dev.diagnostics") version "1.0.2"
+    id("io.github.anyonehub-dev.diagnostics") version "1.1.4"
 }
 ```
 
@@ -63,7 +63,7 @@ Because the plugin generates reports locally in the applying project's directory
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("io.github.anyonehub-dev.diagnostics") version "1.0.2" apply false
+    id("io.github.anyonehub-dev.diagnostics") version "1.1.4" apply false
 }
 
 subprojects {
@@ -100,7 +100,7 @@ Simply invoke the primary aggregation task. Because the plugin binds strictly to
 ```
 
 > [!TIP]  
-> Because of fixes introduced in `1.0.2`, the plugin perfectly supports `org.gradle.parallel=true`. If invoked at the root level across a massive multi-module project, every module will independently and safely generate its own `project-health.md` report directly inside its module directory!
+> Because of fixes introduced in recent versions, the plugin perfectly supports `org.gradle.parallel=true`. If invoked at the root level across a massive multi-module project, every module will independently and safely generate its own `project-health.html` report directly inside its module directory!
 
 ### Exploring the Sub-Tasks
 If you wish to run individual diagnostic tools without generating the final markdown report, you can invoke the intermediate tasks:
@@ -112,11 +112,11 @@ If you wish to run individual diagnostic tools without generating the final mark
 
 ## 📄 Output Artifact
 
-Upon successful execution, the plugin writes `project-health.md` directly into the module's root directory.
+Upon successful execution, the plugin writes `project-health.html` directly into the module's root directory.
 
 ### Example Output Structure
-```markdown
-# 🏥 Project Health Report — my-feature-module
+```html
+<h1>🏥 Project Health Report — my-feature-module</h1>
 
 ## 🚨 Compiler Warnings (Total: 12)
 * **Kotlin**: 8 warnings (e.g. Unchecked casts, Deprecated API usage)
