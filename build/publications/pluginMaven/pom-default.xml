@@ -8,7 +8,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>io.github.anyonehub-dev</groupId>
   <artifactId>anyonehub-project-health-report-plugin</artifactId>
-  <version>1.1.2</version>
+  <version>1.1.4</version>
   <name>Anyone-Hub Project Health Plugin</name>
   <description>A headless, read-only Gradle diagnostic plugin outputting Markdown reports.</description>
   <url>https://github.com/anyonehub-dev/anyonehub-build-diagnostics-gradle-plugin</url>

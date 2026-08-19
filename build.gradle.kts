@@ -33,11 +33,11 @@ gradlePlugin {
 }
 
 group = "io.github.anyonehub-dev"
-version = "1.1.2"
+version = "1.1.4"
 
 mavenPublishing {
     publishToMavenCentral()
-    signAllPublications()
+    // signAllPublications()
 
         pom {
             name.set("Anyone-Hub Project Health Plugin")

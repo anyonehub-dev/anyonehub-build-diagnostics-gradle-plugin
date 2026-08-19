@@ -72,15 +72,6 @@ class ProjectHealthPlugin : Plugin<Project> {
         // android plugin has set up its model — safe for task registration only.
         project.pluginManager.withPlugin("com.android.application") { configureBlock() }
         project.pluginManager.withPlugin("com.android.library") { configureBlock() }
-
-        project.afterEvaluate {
-            if (!configured) {
-                project.logger.debug(
-                    "[ProjectHealthPlugin] Skipping ${project.path}: not an Android module. " +
-                            "Apply 'com.android.application' or 'com.android.library' first."
-                )
-            }
-        }
     }
 
     /**
@@ -164,42 +155,22 @@ class ProjectHealthPlugin : Plugin<Project> {
             mustRunAfter("compileDebugKotlin", "compileDebugJavaWithJavac")
         }
 
-        // ── DEFECT-2 FIX: Lazy runtimeClasspath provider ──────────────────────
-        // Wrapping configuration resolution in project.provider { } defers it to
-        // execution time (when Gradle actually resolves the FileCollection), instead
-        // of calling .artifactFiles eagerly inside afterEvaluate (which triggered
-        // live resolution during the configuration phase and caused IDE sync hangs).
-        val runtimeJarsProvider = project.provider {
-            val config = project.configurations.findByName("releaseRuntimeClasspath")
-                ?: project.configurations.findByName("debugRuntimeClasspath")
-            config?.incoming
-                ?.artifactView { view -> view.lenient(true) }
-                ?.artifacts
-                ?.artifactFiles
-                ?: project.files()
-        }
 
         // ── DEFECT-2 FIX: Lazy declared-coordinates provider ──────────────────
-        // project.provider { } defers DependencySet access to execution time.
-        // cfg.dependencies returns declared (not resolved) dependencies — no
-        // resolution engine is triggered. The @Suppress remains for the deprecated
-        // DependencySet API, which still exists on Gradle 8 and is the only way
-        // to introspect declared coordinates without triggering resolution.
-        val declaredCoordsProvider = project.provider {
-            buildList {
-                project.configurations
-                    .filter { cfg ->
-                        cfg.name.endsWith("Implementation", ignoreCase = true) ||
-                                cfg.name.endsWith("Api", ignoreCase = true)
+        // Avoid execution-time evaluation (which caused configuration deadlocks).
+        // Instead, lazily append coordinates to a ListProperty as dependencies are added.
+        val declaredCoords = project.objects.listProperty(String::class.java)
+        project.configurations.configureEach { cfg ->
+            if (cfg.name.endsWith("Implementation", ignoreCase = true) ||
+                cfg.name.endsWith("Api", ignoreCase = true)
+            ) {
+                cfg.dependencies.configureEach { dep ->
+                    if (dep is org.gradle.api.artifacts.ExternalDependency) {
+                        dep.version?.let { version ->
+                            declaredCoords.add("${dep.group.orEmpty()}:${dep.name}:$version")
+                        }
                     }
-                    .flatMap { cfg ->
-                        @Suppress("DEPRECATION")
-                        cfg.dependencies.filterIsInstance<org.gradle.api.artifacts.ExternalDependency>()
-                    }
-                    .forEach { dep ->
-                        val version = dep.version ?: return@forEach
-                        add("${dep.group.orEmpty()}:${dep.name}:$version")
-                    }
+                }
             }
         }
 
@@ -217,11 +188,10 @@ class ProjectHealthPlugin : Plugin<Project> {
                     .orElse(true)
             )
 
-            // Lazy runtime classpath — resolves only at task execution.
-            runtimeClasspathJars.from(runtimeJarsProvider)
 
-            // Lazy declared coordinates — resolves only at task execution.
-            declaredDependencies.set(declaredCoordsProvider)
+
+            // Lazy declared coordinates — resolves safely during execution.
+            declaredDependencies.set(declaredCoords)
 
             // Wire the compiled classes dir lazily (directory may not exist yet).
             compiledClassesDir.from(
@@ -258,6 +228,9 @@ class ProjectHealthPlugin : Plugin<Project> {
                 }
                 aggregateTask.configure {
                     it.variantName.set(variant.name)
+                }
+                dependencyTask.configure {
+                    it.runtimeClasspathJars.from(variant.runtimeConfiguration.incoming.artifactView { view -> view.lenient(true) }.artifacts.artifactFiles)
                 }
             }
         }

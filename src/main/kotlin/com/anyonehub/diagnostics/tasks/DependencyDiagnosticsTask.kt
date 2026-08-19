@@ -83,7 +83,7 @@ abstract class DependencyDiagnosticsTask @Inject constructor(
     /**
      * Flat list of dependency coordinate strings (`group:artifact:version`) declared
      * in `implementation` or `api` configurations. Populated in
-     * [com.anyonehub.diagnostics.ProjectHealthPlugin] via `afterEvaluate`.
+     * [com.anyonehub.diagnostics.ProjectHealthPlugin] via a lazy provider.
      */
     @get:Input
     abstract val declaredDependencies: ListProperty<String>
