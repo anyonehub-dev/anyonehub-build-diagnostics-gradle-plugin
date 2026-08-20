@@ -339,6 +339,7 @@ abstract class DependencyDiagnosticsTask : DefaultTask() {
             futures.forEach { it.get() }
         } finally {
             pool.shutdown()
+            pool.awaitTermination(1, java.util.concurrent.TimeUnit.HOURS)
         }
     }
 

@@ -205,13 +205,15 @@ class ProjectHealthPlugin : Plugin<Project> {
         ) {
             group = TASK_GROUP
             description = "Aggregates all pipeline outputs into a final health report."
-            deadCodeIntermediateFile.set(deadCodeIntermediate)
-            compilerIntermediateFile.set(compilerIntermediate)
-            dependencyIntermediateFile.set(dependencyIntermediate)
+            
+            // Wire task dependencies naturally using Provider/Property APIs
+            deadCodeIntermediateFile.set(deadCodeTask.flatMap { it.outputFile })
+            compilerIntermediateFile.set(compilerTask.flatMap { it.outputFile })
+            dependencyIntermediateFile.set(dependencyTask.flatMap { it.outputFile })
+            
             reportOutputFile.set(healthReportFile)
             projectName.set(project.name)
             projectPath.set(project.path)
-            dependsOn(deadCodeTask, compilerTask, dependencyTask)
         }
 
         // ── Step 3: AGP Artifacts API wiring (inside onVariants — truly lazy) ─
@@ -230,23 +232,14 @@ class ProjectHealthPlugin : Plugin<Project> {
                     it.variantName.set(variant.name)
                 }
                 dependencyTask.configure {
-                    it.runtimeClasspathJars.from(variant.runtimeConfiguration.incoming.artifactView { view -> view.lenient(true) }.artifacts.artifactFiles)
+                    // Bind the configuration directly during configuration phase
+                    it.runtimeClasspathJars.from(variant.runtimeConfiguration)
                 }
             }
         }
 
         // ── DEFECT-3 FIX: Wire finalizedBy during configuration phase ──────────
-        // tasks.configureEach is a configuration-phase API. The block runs for each
-        // task as it is registered (lazy), not eagerly. No whenReady is involved.
-        //
-        // Clean-build safety: if no assemble/bundle task is in the execution graph
-        // (e.g. on ./gradlew clean), none of these tasks run, so finalizedBy never
-        // triggers the diagnostic pipeline. The explicit whenReady guard is gone.
-        project.tasks.configureEach { task ->
-            if (task.name.startsWith("assemble") || task.name.startsWith("bundle")) {
-                task.finalizedBy(aggregateTask)
-            }
-        }
+        // (Removed blanket configureEach { finalizedBy } as it causes cyclic graph issues)
 
         // ── DEFECT-3 FIX: Wire KotlinCompile listeners at configuration phase ──
         // Moving from inside whenReady to here ensures Gradle's task-graph assembly
