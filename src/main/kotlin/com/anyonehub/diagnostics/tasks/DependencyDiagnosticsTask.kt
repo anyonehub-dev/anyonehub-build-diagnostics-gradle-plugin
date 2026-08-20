@@ -11,7 +11,7 @@
 package com.anyonehub.diagnostics.tasks
 
 import com.anyonehub.diagnostics.model.DependencyStatus
-import com.anyonehub.diagnostics.worker.VersionCheckWorkAction
+import com.anyonehub.diagnostics.worker.DependencyVersionChecker
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -26,9 +26,10 @@ import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
 import org.gradle.kotlin.dsl.*
-import org.gradle.workers.WorkerExecutor
 import java.io.File
-import javax.inject.Inject
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
 
 /**
  * Pipeline B — Dependency Diagnostics Task.
@@ -58,9 +59,7 @@ import javax.inject.Inject
 // Bytecode scanning reads machine-local intermediates that differ across CI workers.
 @UntrackedTask(because = "Performs live network checks against Maven repositories and scans " +
         "machine-local bytecode intermediates; outputs are not safe to cache across builds or machines.")
-abstract class DependencyDiagnosticsTask @Inject constructor(
-    private val workerExecutor: WorkerExecutor,
-) : DefaultTask() {
+abstract class DependencyDiagnosticsTask : DefaultTask() {
 
     /**
      * JARs resolved from the `runtimeClasspath` configuration via `ArtifactView`.
@@ -316,30 +315,31 @@ abstract class DependencyDiagnosticsTask @Inject constructor(
         coordinates: List<String>,
         workerOutputDir: File,
     ) {
-        val queue = workerExecutor.noIsolation()
+        val pool = Executors.newFixedThreadPool(8.coerceAtMost(coordinates.size.coerceAtLeast(1)))
+        try {
+            val futures = mutableListOf<Future<Unit>>()
+            coordinates.forEach { coord ->
+                val parts = coord.split(":")
+                if (parts.size < 3) return@forEach
+                val group   = parts[0]
+                val artifact = parts[1]
+                val version  = parts[2]
+                val safeKey  = "${group.replace('.', '_')}__${artifact.replace('.', '_')}.txt"
+                val workerOutput = File(workerOutputDir, safeKey)
 
-        coordinates.forEach { coord ->
-            val parts = coord.split(":")
-            if (parts.size < 3) return@forEach
-
-            val group   = parts[0]
-            val artifact = parts[1]
-            val version  = parts[2]
-            val safeKey  = "${group.replace('.', '_')}__${artifact.replace('.', '_')}.txt"
-            val workerOutput = File(workerOutputDir, safeKey)
-
-            queue.submit(VersionCheckWorkAction::class.java) { params ->
-                params.group.set(group)
-                params.artifact.set(artifact)
-                params.currentVersion.set(version)
-                params.outputFile.set(workerOutput)
+                futures.add(pool.submit(Callable {
+                    DependencyVersionChecker.checkVersion(
+                        group = group,
+                        artifact = artifact,
+                        current = version,
+                        output = workerOutput
+                    )
+                }))
             }
+            futures.forEach { it.get() }
+        } finally {
+            pool.shutdown()
         }
-
-        // Block only this task's worker thread until all version-check workers complete,
-        // then proceed to collectWorkerResults(). Gradle can schedule other tasks
-        // on other threads while we wait — unlike the old Future.get() pattern.
-        queue.await()
     }
 
     /**

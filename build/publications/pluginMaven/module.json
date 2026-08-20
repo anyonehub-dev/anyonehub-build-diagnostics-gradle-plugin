@@ -3,7 +3,7 @@
   "component": {
     "group": "io.github.anyonehub-dev",
     "module": "anyonehub-project-health-report-plugin",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "attributes": {
       "org.gradle.status": "release"
     }
@@ -27,13 +27,13 @@
       },
       "files": [
         {
-          "name": "anyonehub-project-health-report-plugin-1.1.4.jar",
-          "url": "anyonehub-project-health-report-plugin-1.1.4.jar",
-          "size": 116480,
-          "sha512": "ad8a947b6a43144337dc203df7be8f7cbd6f653dcf59ca5fa7358cefc23a56a8b7d10a5ee75416a94b4d60b8e9ebed2e2c8bb1b883bb23f40b7cdf587e2ce67d",
-          "sha256": "1f0d41b6f47c5049529c4db90cc2a1c52e04a0955babac6957443fdc91165750",
-          "sha1": "21608381a4e11823611e84402667bfd205ece6b0",
-          "md5": "6bfbd0342a1d5386239e81494f265432"
+          "name": "anyonehub-project-health-report-plugin-1.1.5.jar",
+          "url": "anyonehub-project-health-report-plugin-1.1.5.jar",
+          "size": 113517,
+          "sha512": "82314936d6ae5350a17c530f04382a7f251686e9ff72008e49a3eacc9925210451d6782f0a44ebc9afb9eaab14611a3d6cd4cec395c164e3607f3d038e0f2b4e",
+          "sha256": "3a1eedf3457d0a70898b9aa53b1c045d2f1d3addd22a913329c7928b5b150a2b",
+          "sha1": "595819b79f8ddb3b97f3aaec29b0cd2214c2ddca",
+          "md5": "33c8827bc99ffae197ed9a96f0d15b34"
         }
       ]
     },
@@ -65,13 +65,13 @@
       ],
       "files": [
         {
-          "name": "anyonehub-project-health-report-plugin-1.1.4.jar",
-          "url": "anyonehub-project-health-report-plugin-1.1.4.jar",
-          "size": 116480,
-          "sha512": "ad8a947b6a43144337dc203df7be8f7cbd6f653dcf59ca5fa7358cefc23a56a8b7d10a5ee75416a94b4d60b8e9ebed2e2c8bb1b883bb23f40b7cdf587e2ce67d",
-          "sha256": "1f0d41b6f47c5049529c4db90cc2a1c52e04a0955babac6957443fdc91165750",
-          "sha1": "21608381a4e11823611e84402667bfd205ece6b0",
-          "md5": "6bfbd0342a1d5386239e81494f265432"
+          "name": "anyonehub-project-health-report-plugin-1.1.5.jar",
+          "url": "anyonehub-project-health-report-plugin-1.1.5.jar",
+          "size": 113517,
+          "sha512": "82314936d6ae5350a17c530f04382a7f251686e9ff72008e49a3eacc9925210451d6782f0a44ebc9afb9eaab14611a3d6cd4cec395c164e3607f3d038e0f2b4e",
+          "sha256": "3a1eedf3457d0a70898b9aa53b1c045d2f1d3addd22a913329c7928b5b150a2b",
+          "sha1": "595819b79f8ddb3b97f3aaec29b0cd2214c2ddca",
+          "md5": "33c8827bc99ffae197ed9a96f0d15b34"
         }
       ]
     },
@@ -85,13 +85,13 @@
       },
       "files": [
         {
-          "name": "anyonehub-project-health-report-plugin-1.1.4-sources.jar",
-          "url": "anyonehub-project-health-report-plugin-1.1.4-sources.jar",
-          "size": 37045,
-          "sha512": "745092d2457b5db6049886122b25ba0d1883a86b4f03864964442259ef4aa642d3a5b2cd7402bb692d62dbec498bad6fec930017141075a9ba720c93f4aa65fb",
-          "sha256": "767802340f561c5433d7ae42dddc9ed1a4c7948d4c1010b208610627db0bed27",
-          "sha1": "0172c152e56e45e934867a80f1da9fc0d8228e14",
-          "md5": "478bc69fee1c60c2781ab47179981191"
+          "name": "anyonehub-project-health-report-plugin-1.1.5-sources.jar",
+          "url": "anyonehub-project-health-report-plugin-1.1.5-sources.jar",
+          "size": 35595,
+          "sha512": "914677c5ae03ca790da51fd56a33ff20dfb555a5f4beaaaa327ac0d05540cefc5f3f5680a2b2f000a2d3d77af6a7d5c6b70febab87ac867210e40ba9200a7438",
+          "sha256": "8a6acb881d6fd4e90d89b62a6d98c66dc6af8d72a3cc6ddfcaf292a69c5e56de",
+          "sha1": "4f6708f4fb79563210f2f07b61204b08795c2723",
+          "md5": "bf590d6ebdb3cd59f5f2fd7413469948"
         }
       ]
     }

@@ -3,9 +3,9 @@
 ![Project Health Plugin Banner](/home/anyone-hub/.gemini/antigravity-ide/brain/8e76a0c7-48cf-4463-97b9-edd56bd92d47/health_plugin_banner_1785828905751.png)
 
 # Anyone-Hub Project Health Diagnostics Plugin
-**Version 1.1.4** | **Gradle Plugin**
+**Version 1.1.5** | **Gradle Plugin**
 
-[![Maven Central](https://img.shields.io/badge/Maven_Central-v1.1.4-blue?style=for-the-badge&logo=apachemaven)](https://search.maven.org/artifact/io.github.anyonehub-dev/diagnostics)
+[![Maven Central](https://img.shields.io/badge/Maven_Central-v1.1.5-blue?style=for-the-badge&logo=apachemaven)](https://search.maven.org/artifact/io.github.anyonehub-dev/diagnostics)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.4.10-purple?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
 [![Gradle](https://img.shields.io/badge/Gradle-9.3.1-02303A?style=for-the-badge&logo=gradle)](https://gradle.org)
 
@@ -53,7 +53,7 @@ To apply the plugin, include it in your root `build.gradle.kts` (to apply to all
 
 ```kotlin
 plugins {
-    id("io.github.anyonehub-dev.diagnostics") version "1.1.4"
+    id("io.github.anyonehub-dev.diagnostics") version "1.1.5"
 }
 ```
 
@@ -63,7 +63,7 @@ Because the plugin generates reports locally in the applying project's directory
 ```kotlin
 // root build.gradle.kts
 plugins {
-    id("io.github.anyonehub-dev.diagnostics") version "1.1.4" apply false
+    id("io.github.anyonehub-dev.diagnostics") version "1.1.5" apply false
 }
 
 subprojects {
